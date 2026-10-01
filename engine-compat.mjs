@@ -50,3 +50,28 @@ export function patchBooleanLiterals(source) {
   if (source.match(entry)?.length !== 1) throw new Error("Recheck FortuneSheet's boolean literal parser patch.");
   return source.replace(entry, '$&\n      if (/^(TRUE|FALSE)$/i.test(label)) return label.toUpperCase() === "TRUE";');
 }
+
+// Formula source can contain line breaks (for example, exported Google Sheets
+// IF expressions). The editor must not convert those formulas to rich text.
+export function patchFormulaEditing(source) {
+  const multiline = /if \(!isCurInline && inputText && inputText.length > 0\) \{/g;
+  if (source.match(multiline)?.length !== 1) throw new Error("Recheck FortuneSheet's multiline formula editing patch.");
+  source = source.replace(multiline, "if (!isCurInline && inputText && inputText.length > 0 && !isFormula(inputText)) {");
+  const previous = /var curv = flowdata\[r\]\[c\];\n  var oldValue = /g;
+  if (source.match(previous)?.length !== 1) throw new Error("Recheck FortuneSheet's unchanged formula editing patch.");
+  // contenteditable normalizes CRLF to LF. An unchanged commit must retain
+  // the original formula and its cached result, even for unsupported functions.
+  source = source.replace(previous, `var curv = flowdata[r][c];
+  if (value == null && isFormula(curv?.f) && typeof inputText === "string" && inputText.replace(/\\r\\n?/g, "\\n") === curv.f.replace(/\\r\\n?/g, "\\n")) {
+    cancelNormalSelected(ctx);
+    return;
+  }
+  var oldValue = `);
+  // Dependency validation ran before trimming whitespace around references,
+  // so references on their own lines were silently omitted from the graph.
+  const reference = /var t = formulaTextArray\[_j2\];/g;
+  if (source.match(reference)?.length !== 1) throw new Error("Recheck FortuneSheet's multiline formula dependency patch.");
+  return source.replace(reference, "var t = formulaTextArray[_j2].trim();");
+}
+
+export function patchCore(source) { return patchFormulaEditing(patchWheelScroll(source)); }
