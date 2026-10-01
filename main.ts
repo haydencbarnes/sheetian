@@ -1,86 +1,52 @@
-import { App, Editor, MarkdownView, Notice, Plugin, WorkspaceLeaf } from 'obsidian';
-import { SpreadsheetView, VIEW_TYPE_SPREADSHEET } from "./view"
-
-
-
-async function create_new_file(app, folder_path, file_no){
-
-	if(folder_path){
-		try {
-			await app.vault.createFolder(folder_path);
-		} catch (err) {
-			console.log("issue in making folder");
-			console.log(err);
-		}
-	}	
-	
-
-	let file_name = "Untitled.sheet"
-
-	if(file_no){
-		file_name = "Untitled"+ file_no +".sheet"
-	}
-
-	let file_path = file_name;
-	if(folder_path){
-		file_path = folder_path + "/" + file_name;
-	}
-
-	try {
-		await app.vault.create(file_path, "");
-
-		await app.workspace.getLeaf(true).setViewState({
-			type: VIEW_TYPE_SPREADSHEET,
-			active: true,
-			state: { file: file_path }
-		  });
-
-		new Notice('Create spreadsheet at : ' + file_path);
-	} catch (err) {
-		const error = err;
-   		if (error.message.includes("File already exists")) {
-			return await create_new_file(app , folder_path , (file_no||0)+1 )
-		}
-	}
-}
-
+import { Notice, Plugin, TFolder, WorkspaceLeaf, normalizePath } from "obsidian";
+import { SpreadsheetView, VIEW_TYPE_SPREADSHEET } from "./view";
+import { DEFAULT_SETTINGS, SpreadsheetSettings, SpreadsheetSettingTab } from "./settings";
 
 export default class SpreadsheetPlugin extends Plugin {
+  settings: SpreadsheetSettings = { ...DEFAULT_SETTINGS };
 
-	async onload() {
+  async onload(): Promise<void> {
+    this.settings = { ...DEFAULT_SETTINGS, ...await this.loadData() };
+    this.registerView(VIEW_TYPE_SPREADSHEET, (leaf: WorkspaceLeaf) => new SpreadsheetView(leaf, () => this.settings));
+    this.registerExtensions(["sheet"], VIEW_TYPE_SPREADSHEET);
+    this.addSettingTab(new SpreadsheetSettingTab(this.app, this));
+    this.addRibbonIcon("table", "New spreadsheet", () => { void this.createSpreadsheet(); });
+    this.addCommand({ id: "new-spreadsheet", name: "New spreadsheet", callback: () => { void this.createSpreadsheet(); } });
+    this.addCommand({ id: "export-csv", name: "Export active sheet to CSV", checkCallback: checking => {
+      const view = this.app.workspace.getActiveViewOfType(SpreadsheetView);
+      if (!view) return false;
+      if (!checking) void view.exportCsv().catch(error => new Notice(`CSV export failed: ${error.message}`));
+      return true;
+    } });
+    this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
+      const folder = file instanceof TFolder ? file.path : file.parent?.path;
+      menu.addItem(item => item.setTitle("New spreadsheet").setIcon("table")
+        .onClick(() => { void this.createSpreadsheet(folder); }));
+    }));
+  }
 
-		const ribbonIconEl = this.addRibbonIcon('table', 'New Spreadsheet', (evt: MouseEvent) => {
-			create_new_file(this.app, undefined, undefined);
-		});
+  async saveSettings(): Promise<void> { await this.saveData(this.settings); }
 
-
-		let app = this.app;
-
-		this.registerEvent(
-			this.app.workspace.on("file-menu", (menu, file) => {
-				menu.addItem((item) => {
-				  item.setTitle("New spreadsheet").setIcon("document").onClick(function(){
-					 create_new_file(app, file.path, 0 )
-				  });
-				});
-			})
-		  );
-
-		this.registerView(
-			VIEW_TYPE_SPREADSHEET,
-			  (leaf: WorkspaceLeaf) => new SpreadsheetView(leaf)
-		  );
-
-
-		this.registerExtensions(["sheet"], VIEW_TYPE_SPREADSHEET);
-
-
-	}
-
-	onunload() {
-
-	}
-
+  async createSpreadsheet(folder = this.settings.folder): Promise<void> {
+    try {
+      const normalized = normalizePath(folder);
+      if (normalized && normalized !== "/") {
+        let path = "";
+        for (const part of normalized.split("/")) {
+          if (part === ".." || part === ".") throw new Error("Choose a folder inside the vault.");
+          path = path ? `${path}/${part}` : part;
+          const existing = this.app.vault.getAbstractFileByPath(path);
+          if (existing && !(existing instanceof TFolder)) throw new Error(`${path} is a file, not a folder.`);
+          if (!existing) await this.app.vault.createFolder(path);
+        }
+      }
+      const prefix = normalized && normalized !== "/" ? `${normalized}/` : "";
+      let path = `${prefix}Untitled.sheet`;
+      for (let n = 1; this.app.vault.getAbstractFileByPath(path); n++) path = `${prefix}Untitled${n}.sheet`;
+      const file = await this.app.vault.create(path, JSON.stringify([{ name: "Sheet1", id: "sheet-1", status: 1 }]));
+      await this.app.workspace.getLeaf(true).openFile(file);
+    } catch (error) {
+      new Notice(`Could not create spreadsheet: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 }
-
-

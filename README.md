@@ -1,35 +1,43 @@
-# Obsidian Spreadsheets Plugin
+# Obsidian Spreadsheets
 
-This plugin gives you all the features of a standard spreadsheet tool in Obsidian. You can build powerful spreadsheets within Obsidian. 
+Create and edit spreadsheet files inside **desktop Obsidian**. This fork of [Divam Gupta's plugin](https://github.com/divamgupta/obsidian-spreadsheets) uses [FortuneSheet](https://github.com/ruilisi/fortune-sheet) 1.0.4 and retains the existing JSON `.sheet` format.
 
-This plugin is based on FortuneSheet, which is based on [Luckysheet](https://github.com/dream-num/Luckysheet). 
+The fork repairs data-loss and save lifecycle defects, preserves images, filters, formula chains and other workbook metadata, isolates its stylesheet, fixes paste ownership across multiple open workbooks, and resolves spreadsheet shortcuts intercepted by Obsidian. The full [upstream issue review](ISSUE_TRIAGE.md) documents what is fixed, already available, unconfirmed, or a separate feature request.
 
-### Features: 
+## Use
 
-- Rich text formatting - change fonts, size, colors, borders, cell color, line-wrapping, etc.
+1. Click the table ribbon icon or run **Spreadsheets: New spreadsheet**.
+2. Right-click a folder or file to create a spreadsheet in that folder.
+3. Edit cells, use formulas, format cells, insert images, and filter/sort with the spreadsheet toolbar.
+4. Run **Spreadsheets: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
 
-- Formulas - several build in formulas 
+In **Settings → Spreadsheets**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
 
-- Filter and sort 
+- **F2** opens the current cell editor with the caret at the end.
+- **Cmd+B / Ctrl+B** toggles the selected cells' bold format.
+- **Alt+Enter** inserts a line break while editing a cell. Use the toolbar's text-wrap setting to display wrapped content.
+- The current engine also provides fill-down and edge/range navigation shortcuts.
+- Enter `$300`, `€1,234.50`, `£25`, or the configured currency symbol to store numeric currency values. Cells explicitly formatted as Text stay text.
+- For dates, use `YYYY-MM-DD`; Date-formatted cells also accept `M/D/YYYY`. Dates are stored as Excel-compatible serial numbers.
 
-- Cells - merge cells, resize cells, drag cells 
+Files that cannot be parsed show an error and preserve their original contents. Opening and closing an untouched file does not rewrite it.
 
-### How to use:
+## Build and install
 
-1) Install the plugin.
+Use Node.js 18+ and npm:
 
-2) Create a new spreadsheet by clicking on the "New Spreadsheet" ribbon button. Or right-click on a folder in the left sidebar and click on "New spreadsheet".
+```sh
+npm ci
+npm test
+npm run build
+```
 
-3) Start creating spreadsheets.
+Copy **main.js**, **manifest.json**, and **styles.css** into `<vault>/.obsidian/plugins/spreadsheets/`, then enable **Spreadsheets** in Obsidian's Community plugins settings. The existing plugin ID is retained, so this fork replaces the original installation. Rebuild all three files together; `styles.css` is generated from the pinned engine and `spreadsheet.css`.
 
-### Screenshots: 
+The bundled JavaScript is generated and intentionally ignored by Git. Build-time compatibility patches in `engine-compat.mjs` guard known engine defects and must be reviewed when changing the engine version. The lockfile makes installs reproducible.
 
-![screen1](assets/screen1.png)
+## Scope
 
-![screen2](assets/screen2.png)
+This is a desktop plugin. Mobile compatibility, Google Sheets/XLSX formula-preserving import, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, double-click column autofit, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
 
-![screen3](assets/screen3.png)
-
-![screen3](assets/screen4.png)
-
-![screen5](assets/screen5.png)
+Use GitHub issues for support. The plugin is MIT-licensed; original author: Divam Gupta.

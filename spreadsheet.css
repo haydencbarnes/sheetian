@@ -1,0 +1,44 @@
+.obsidian-spreadsheet-view {
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.obsidian-spreadsheet {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  color: #000;
+  color-scheme: light;
+}
+.obsidian-spreadsheet input,
+.obsidian-spreadsheet textarea,
+.obsidian-spreadsheet [contenteditable="true"] {
+  color: #000;
+  background-color: #fff;
+  box-shadow: none;
+}
+.obsidian-spreadsheet table {
+  display: table;
+  color: #000;
+}
+.obsidian-spreadsheet .fortune-context-menu {
+  margin: 0;
+}
+.obsidian-spreadsheet[data-theme="dark"] > .fortune-container,
+.theme-dark .obsidian-spreadsheet[data-theme="auto"] > .fortune-container {
+  filter: invert(1) hue-rotate(180deg);
+}
+.obsidian-spreadsheet[data-theme="dark"] img,
+.theme-dark .obsidian-spreadsheet[data-theme="auto"] img {
+  filter: invert(1) hue-rotate(180deg);
+}
+.obsidian-spreadsheet-view .spreadsheet-error {
+  padding: 1rem;
+  color: var(--text-error);
+}

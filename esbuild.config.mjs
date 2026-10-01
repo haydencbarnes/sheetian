@@ -1,6 +1,9 @@
 import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
+import { buildCss } from "./build-css.mjs";
+import { readFile } from "node:fs/promises";
+import { patchEngine } from "./engine-compat.mjs";
 
 const banner =
 `/*
@@ -10,12 +13,21 @@ if you want to view the source, please visit the github repository of this plugi
 `;
 
 const prod = (process.argv[2] === "production");
+await buildCss();
 
 const context = await esbuild.context({
 	banner: {
 		js: banner,
 	},
 	entryPoints: ["main.ts"],
+	plugins: [{
+		name: "fortune-compatibility",
+		setup(build) {
+			build.onLoad({ filter: /@fortune-sheet[\\/]react[\\/]dist[\\/]index(?:\.esm)?\.js$/ }, async args => ({
+				contents: patchEngine(await readFile(args.path, "utf8")), loader: "js",
+			}));
+		},
+	}],
 	bundle: true,
 	external: [
 		"obsidian",
@@ -37,6 +49,8 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
+	minify: prod,
+	define: { "process.env.NODE_ENV": JSON.stringify(prod ? "production" : "development") },
 	outfile: "main.js",
 });
 
