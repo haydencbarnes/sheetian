@@ -1,4 +1,4 @@
-import { Notice, Scope, TextFileView, TFile, WorkspaceLeaf } from "obsidian";
+import { Menu, Notice, Scope, TextFileView, TFile, WorkspaceLeaf } from "obsidian";
 import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -22,7 +22,7 @@ export class SpreadsheetView extends TextFileView {
   private resizeFrame: number | null = null;
   private workbook = React.createRef<WorkbookInstance>();
 
-  constructor(leaf: WorkspaceLeaf, private settings: () => SpreadsheetSettings) {
+  constructor(leaf: WorkspaceLeaf, private settings: () => SpreadsheetSettings, private importFile?: () => void) {
     super(leaf);
     this.scope = new Scope(this.app.scope);
     // Obsidian otherwise handles F2 as Rename file before the grid sees it.
@@ -59,6 +59,12 @@ export class SpreadsheetView extends TextFileView {
   }
   getViewType(): string { return VIEW_TYPE_SPREADSHEET; }
   getIcon(): string { return "table"; }
+
+  onPaneMenu(menu: Menu, source: string): void {
+    super.onPaneMenu(menu, source);
+    if (this.importFile) menu.addItem(item => item.setTitle("Import Excel workbook (.xlsx)").setIcon("file-input")
+      .onClick(() => this.importFile!()));
+  }
 
   getViewData(): string {
     // Loading/normalization alone must never rewrite or erase a file.

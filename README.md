@@ -26,7 +26,7 @@ Files that cannot be parsed show an error and preserve their original contents. 
 ## Import from Google Sheets or Excel
 
 1. In Google Sheets, choose **File → Download → Microsoft Excel (.xlsx)**. Existing Excel `.xlsx` workbooks can be imported directly.
-2. In Obsidian, run **Sheetian: Import Excel workbook (.xlsx)** and choose the downloaded file. Alternatively, right-click an `.xlsx` file already in your vault and choose **Import into Sheetian**.
+2. In Obsidian, open a sheet's **⋯** menu at the top right and choose **Import Excel workbook (.xlsx)**, or run **Sheetian: Import Excel workbook (.xlsx)** from the command palette. Select the downloaded file. Alternatively, right-click an `.xlsx` file already in your vault and choose **Import into Sheetian**.
 3. Sheetian creates a new `.sheet` workbook and opens it. The command uses the default folder from Settings; the context-menu action uses the source file's folder. Repeated imports receive numbered filenames.
 
 The importer retains worksheet tabs, ordinary and shared formulas, cross-tab references, cached results, numeric/date formats, basic fonts/alignment/solid colors, rich text, hyperlinks, merged cells, row/column sizes, hidden rows/columns/tabs, and frozen panes. Supported formulas recalculate when their inputs change. Formulas without cached results are calculated on import. Import uses [ExcelJS](https://github.com/exceljs/exceljs).
