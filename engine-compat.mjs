@@ -74,4 +74,41 @@ export function patchFormulaEditing(source) {
   return source.replace(reference, "var t = formulaTextArray[_j2].trim();");
 }
 
-export function patchCore(source) { return patchFormulaEditing(patchWheelScroll(source)); }
+// FormulaJS declares TEXT but throws "not implemented" when it is called.
+// Use the same Excel number/date formatter as the grid and XLSX importer.
+export function patchTextFormula(source) {
+  const parser = /this\.parser = new (?:formulaParser\.)?Parser\(\);/g;
+  if (source.match(parser)?.length !== 1) throw new Error("Recheck FortuneSheet's TEXT formula compatibility patch.");
+  source = source.replace(parser, `$&
+    this.parser.setFunction("TEXT", function (params) {
+      if (params.length !== 2) throw new Error("#N/A");
+      var value = params[0], format = params[1];
+      if (value instanceof Error) throw value;
+      if (format instanceof Error) throw format;
+      if (typeof format !== "string" || Array.isArray(value)) throw new Error("#VALUE!");
+      if (value == null) value = 0;
+      if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) value = Number(value);
+      try { return String(update(format, value)); }
+      catch (_) { throw new Error("#VALUE!"); }
+    });`);
+  // Formula results already have a type. Running returned text through the
+  // input heuristics converts currency messages, dates and numeric text into
+  // numbers, and drops empty strings. Preserve the parser's string result.
+  const result = /  if \(isRealNull\(vupdate\)\) \{/g;
+  if (source.match(result)?.length !== 1) throw new Error("Recheck FortuneSheet's formula text result compatibility patch.");
+  source = source.replace(result, `  if (cell && isFormula(cell.f) && typeof vupdate === "string" && !valueIsError(vupdate)) {
+    cell.v = vupdate;
+    cell.m = vupdate;
+    cell.ct = Object.assign({}, cell.ct || { fa: "General" }, { t: "s" });
+    d[r][c] = cell;
+    return;
+  }
+$&`);
+  // Only complete a single missing closing parenthesis. Appending one to an
+  // already over-closed formula would corrupt it again on every calculation.
+  const brackets = /if \(!checkBracketNum\(txt\)\) \{/g;
+  if (source.match(brackets)?.length !== 1) throw new Error("Recheck FortuneSheet's formula parenthesis compatibility patch.");
+  return source.replace(brackets, 'if (!checkBracketNum(txt) && checkBracketNum(txt + ")")) {');
+}
+
+export function patchCore(source) { return patchTextFormula(patchFormulaEditing(patchWheelScroll(source))); }
