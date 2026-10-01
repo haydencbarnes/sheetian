@@ -6,7 +6,7 @@ Sheetian repairs defects in editing, persistence, integration, and builds. It al
 
 | Issue | Verdict | Evidence and action |
 | --- | --- | --- |
-| [#1 Google Sheets import](https://github.com/divamgupta/obsidian-spreadsheets/issues/1) | Valid enhancement; not implemented | Clipboard data from Google Sheets generally supplies evaluated values. Recovering original formulas requires an XLSX importer or Google Sheets integration, neither present in the original plugin. CSV export is not a formula-preserving importer. |
+| [#1 Google Sheets import](https://github.com/divamgupta/obsidian-spreadsheets/issues/1) | Formula-preserving XLSX import implemented | Download Google Sheets as Microsoft Excel (.xlsx), then use Sheetian's import command or vault-file context menu. Formulas, shared formulas, cached results, tabs, and basic formatting survive; supported formulas recalculate after edits and reopen. Known unsupported functions/references are reported. This is a one-time import, not live Google Sheets synchronization or full Excel compatibility. |
 | [#2 Spreadsheet styling](https://github.com/divamgupta/obsidian-spreadsheets/issues/2) | Practical theme support added | Settings offer Follow Obsidian, Light, and Dark. CSS is scoped to the spreadsheet. Dark display uses inversion with hue rotation and reverses that effect on images; arbitrary Obsidian theme palettes are not translated into canvas colors. |
 | [#3 Insert images](https://github.com/divamgupta/obsidian-spreadsheets/issues/3) | Engine feature exists; persistence fixed | FortuneSheet supports image insertion, as a commenter notes. The original serializer discarded `images`. Images now survive editing, save, and reopening. |
 | [#4 Dark mode](https://github.com/divamgupta/obsidian-spreadsheets/issues/4) | Implemented | Same theme support as #2. |
@@ -39,13 +39,13 @@ Sheetian repairs defects in editing, persistence, integration, and builds. It al
 ## Validation
 
 - Production build succeeds, including TypeScript checking.
-- **23 automated regression tests** cover dense/sparse compatibility, metadata, formula chains, typed currency, dates, CSV quoting, stylesheet isolation, stale callbacks, unmount cleanup, file-save lifecycle, and AutoFit measurement/selection, and wheel scrolling under browser pixel rounding.
-- **18 live Obsidian regression groups** cover untouched files, manual currency/formulas/dates, Excel HTML paste with multiple workbooks, viewport navigation, CSV/collision handling, close-during-edit, reopen/same-tab switches, malformed-file preservation, and column AutoFit including multiple selections, undo/redo, persistence, scrolling, freezing, and zoom, plus returning to the top with zoomed/hidden/custom-height/frozen rows.
-- Build-time guards cover FortuneSheet's delayed focus, workbook paste ownership, the column resize target, and upward wheel-scroll rounding. They fail the build if an engine upgrade changes the expected source sites.
-- Sheetian 1.0.5 is installed and enabled locally. No upstream issues were closed or commented on.
+- **31 automated regression tests** cover dense/sparse compatibility, metadata, formula chains, typed currency, dates, CSV quoting, stylesheet isolation, stale callbacks, unmount cleanup, file-save lifecycle, AutoFit measurement/selection, wheel scrolling under browser pixel rounding, XLSX conversion, 1904 dates, invalid/oversize imports, unsupported-formula preservation, and boolean literal parsing.
+- **23 live Obsidian regression groups** cover untouched files, manual currency/formulas/dates, Excel HTML paste with multiple workbooks, viewport navigation, CSV/collision handling, close-during-edit, reopen/same-tab switches, malformed-file preservation, column AutoFit including multiple selections, undo/redo, persistence, scrolling, freezing, and zoom, returning to the top with zoomed/hidden/custom-height/frozen rows, and import/recalculation/save/reopen/collision/error handling.
+- Build-time guards cover FortuneSheet's delayed focus, workbook paste ownership, the column resize target, upward wheel-scroll rounding, and boolean literal parsing. They fail the build if an engine upgrade changes the expected source sites.
+- Sheetian 1.0.6 is installed and enabled locally. No upstream issues were closed or commented on.
 - These checks do not establish full Excel compatibility, mobile support, or exhaustive testing of every formula, theme, or historic Obsidian release.
 
-Dependency audit retains the upstream UUID advisory and the Moment advisory from Obsidian's development dependency. The plugin bundles the engine's UUID v4 usage; the cited UUID issue concerns v3/v5/v6 caller-provided buffers. Obsidian and its Moment runtime remain external to the plugin bundle. No high/critical dependency findings remain in this build's audit.
+Dependency audit retains the UUID advisory through FortuneSheet and ExcelJS, and the Moment advisory from Obsidian's development dependency. The bundled libraries use UUID v4; the cited UUID issue concerns v3/v5/v6 caller-provided buffers. Obsidian and its Moment runtime remain external to the plugin bundle. No high/critical dependency findings remain in this build's audit.
 
 ## Additional local report
 

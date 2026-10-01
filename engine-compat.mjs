@@ -34,3 +34,12 @@ export function patchWheelScroll(source) {
   var upwardRounding = e.deltaY < 0 ? 0.5 / scrollPixelRatio + 0.0001 : 0;
   var row_st = ${lodash}.sortedIndex(visibledatarow_c, scrollTop - upwardRounding) + 1;`);
 }
+
+// The parser lexer treats bare TRUE/FALSE as column labels and rejects them
+// before looking up its built-in variables. Recognize only the exact literals
+// here, leaving quoted sheet names, cell references and strings to the parser.
+export function patchBooleanLiterals(source) {
+  const entry = /value: function _callCellValue\(label\) \{/g;
+  if (source.match(entry)?.length !== 1) throw new Error("Recheck FortuneSheet's boolean literal parser patch.");
+  return source.replace(entry, '$&\n      if (/^(TRUE|FALSE)$/i.test(label)) return label.toUpperCase() === "TRUE";');
+}

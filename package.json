@@ -1,6 +1,6 @@
 {
 	"name": "sheetian",
-	"version": "1.0.5",
+	"version": "1.0.6",
 	"description": "Plugin to create spreadsheets in Obsidian.",
 	"main": "main.js",
 	"scripts": {
@@ -28,6 +28,7 @@
 	"dependencies": {
 		"@fortune-sheet/core": "1.0.4",
 		"@fortune-sheet/react": "1.0.4",
+		"exceljs": "4.4.0",
 		"react": "18.3.1",
 		"react-dom": "18.3.1"
 	}

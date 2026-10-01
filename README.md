@@ -23,6 +23,16 @@ In **Settings → Sheetian**, choose the default folder, currency symbol, and li
 
 Files that cannot be parsed show an error and preserve their original contents. Opening and closing an untouched file does not rewrite it.
 
+## Import from Google Sheets or Excel
+
+1. In Google Sheets, choose **File → Download → Microsoft Excel (.xlsx)**. Existing Excel `.xlsx` workbooks can be imported directly.
+2. In Obsidian, run **Sheetian: Import Excel workbook (.xlsx)** and choose the downloaded file. Alternatively, right-click an `.xlsx` file already in your vault and choose **Import into Sheetian**.
+3. Sheetian creates a new `.sheet` workbook and opens it. The command uses the default folder from Settings; the context-menu action uses the source file's folder. Repeated imports receive numbered filenames.
+
+The importer retains worksheet tabs, ordinary and shared formulas, cross-tab references, cached results, numeric/date formats, basic fonts/alignment/solid colors, rich text, hyperlinks, merged cells, row/column sizes, hidden rows/columns/tabs, and frozen panes. Supported formulas recalculate when their inputs change. Formulas without cached results are calculated on import. Import uses [ExcelJS](https://github.com/exceljs/exceljs).
+
+This is a one-time import; changes do not sync back to Google Sheets. CSV and normal clipboard paste cannot preserve the original formulas. Formula text and available cached results are retained for unsupported formulas, but Google-specific functions (such as `QUERY`, `IMPORTRANGE`, and `GOOGLEFINANCE`), newer Excel functions, named ranges, external/structured references, and array/spill expansion may not recalculate. Recognized limitations are shown after import. Named-range definitions are retained as metadata. Images, charts, and Excel-specific features such as table/filter definitions, conditional formatting, and validation are not imported; theme colors and borders are not translated. Imports are limited to 25 MB and 1,000,000 grid cells across all tabs, including the engine's minimum 100 × 26 grid per tab.
+
 ## Build and install
 
 Use Node.js 18+ and npm:
@@ -39,6 +49,6 @@ The bundled JavaScript is generated and intentionally ignored by Git. Build-time
 
 ## Scope
 
-This is a desktop plugin. Mobile compatibility, Google Sheets/XLSX formula-preserving import, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
+This is a desktop plugin. Mobile compatibility, live Google Sheets synchronization, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
 
 Use GitHub issues for support. The plugin is MIT-licensed; original author: Divam Gupta.

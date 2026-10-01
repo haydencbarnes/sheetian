@@ -3,7 +3,7 @@ import process from "process";
 import builtins from "builtin-modules";
 import { buildCss } from "./build-css.mjs";
 import { readFile } from "node:fs/promises";
-import { patchEngine, patchWheelScroll } from "./engine-compat.mjs";
+import { patchEngine, patchWheelScroll, patchBooleanLiterals } from "./engine-compat.mjs";
 
 const banner =
 `/*
@@ -23,6 +23,9 @@ const context = await esbuild.context({
 	plugins: [{
 		name: "fortune-compatibility",
 		setup(build) {
+			build.onLoad({ filter: /@fortune-sheet[\\/]formula-parser[\\/](?:es|lib)[\\/]parser\.js$/ }, async args => ({
+				contents: patchBooleanLiterals(await readFile(args.path, "utf8")), loader: "js",
+			}));
 			build.onLoad({ filter: /@fortune-sheet[\\/]react[\\/]dist[\\/]index(?:\.esm)?\.js$/ }, async args => ({
 				contents: patchEngine(await readFile(args.path, "utf8")), loader: "js",
 			}));

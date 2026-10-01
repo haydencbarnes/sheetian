@@ -221,4 +221,30 @@ export class SpreadsheetView extends TextFileView {
     await this.app.vault.create(path, sheetToCsv(sheet));
     new Notice(`Exported active sheet to ${path}`);
   }
+
+  async calculateImportedFormulas(cells: { id: string; r: number; c: number }[]): Promise<void> {
+    const generation = this.generation;
+    const ownerWindow = this.contentEl.ownerDocument.defaultView!;
+    for (let n = 0; n < 250; n++) {
+      if (generation !== this.generation) throw new Error("Workbook was closed during import.");
+      const sheets = this.workbook.current?.getAllSheets();
+      if (sheets?.length === this.sheets.length && sheets.every(sheet => sheet.data?.length)) break;
+      if (n === 249) throw new Error("Workbook did not finish loading.");
+      await new Promise(resolve => ownerWindow.setTimeout(resolve, 20));
+    }
+    // Re-enter only uncached formulas. Unlike calculateFormula(), this public
+    // API preserves their formula text and establishes dependency tracking.
+    const originalId = this.workbook.current!.getSheet().id;
+    for (const { id, r, c } of cells) {
+      // The engine's formula setter uses the active sheet despite options.id.
+      if (this.workbook.current!.getSheet().id !== id) {
+        flushSync(() => this.workbook.current!.activateSheet({ id }));
+      }
+      const api = this.workbook.current!;
+      const cell = api.getSheet().data?.[r]?.[c];
+      if (cell?.f) flushSync(() => api.setCellValue(r, c, { f: cell.f, ct: cell.ct }));
+    }
+    flushSync(() => this.workbook.current!.activateSheet({ id: originalId }));
+    await this.save();
+  }
 }
