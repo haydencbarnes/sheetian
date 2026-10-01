@@ -2,7 +2,7 @@
 
 Reviewed every issue and its complete comment thread in [divamgupta/obsidian-spreadsheets](https://github.com/divamgupta/obsidian-spreadsheets): **29 issues, including 27 open and 2 closed**. Issues #22 and #24 are pull requests, not missing issue reports. Review baseline: upstream `master` at `5ce73d6`.
 
-This fork repairs defects in editing, persistence, integration, and builds. It also adds small practical features: theme selection, currency selection, default creation folder, and active-sheet CSV export. Larger requested features are listed explicitly below; they are not dismissed as invalid simply because they are enhancements.
+Sheetian repairs defects in editing, persistence, integration, and builds. It also adds small practical features: theme selection, currency selection, default creation folder, and active-sheet CSV export. Larger requested features are listed explicitly below; they are not dismissed as invalid simply because they are enhancements.
 
 | Issue | Verdict | Evidence and action |
 | --- | --- | --- |
@@ -17,7 +17,7 @@ This fork repairs defects in editing, persistence, integration, and builds. It a
 | [#9 Viewport jumps](https://github.com/divamgupta/obsidian-spreadsheets/issues/9) | Current integration repaired; original intermittent report not fully reconstructed | Replaced viewport-height sizing with pane sizing, removed global context-menu offsets, upgraded the engine, and fixed resize-observer cleanup. Live navigation in a pane with the sidebar open retains horizontal scroll at column A. This does not claim to cover every historic theme/sidebar combination. |
 | [#10 Excel paste invisible/missing](https://github.com/divamgupta/obsidian-spreadsheets/issues/10) | Confirmed multi-workbook defect; fixed | Inactive workbooks accepted the active overlay's document-level paste event and consumed the shared paste flag. Added a workbook-ownership guard. Excel-style HTML now pastes only into the active workbook; inactive files remain byte-identical. Generated CSS now matches the pinned engine release. The issue has too little detail to establish that this was every reporter's cause. |
 | [#11 Phones](https://github.com/divamgupta/obsidian-spreadsheets/issues/11) | Valid platform request; not implemented | The manifest intentionally declares `isDesktopOnly: true`. Kept that declaration and documented it. No untested claim of mobile compatibility. |
-| [#12 README typos](https://github.com/divamgupta/obsidian-spreadsheets/issues/12) | Already fixed upstream | Closed upstream following the README correction. Refreshed this fork's README for current behavior. |
+| [#12 README typos](https://github.com/divamgupta/obsidian-spreadsheets/issues/12) | Already fixed upstream | Closed upstream following the README correction. Refreshed Sheetian's README for current behavior. |
 | [#13 Help forum / multiline cells](https://github.com/divamgupta/obsidian-spreadsheets/issues/13) | Support question; existing feature | No dedicated forum is configured. GitHub issues are the support channel. The engine implements Alt+Enter inside a cell; documented it. |
 | [#14 Embed sheets in notes](https://github.com/divamgupta/obsidian-spreadsheets/issues/14) | Valid enhancement; not implemented | No Markdown embed renderer is registered. Editable embeddings would also need coordinated save ownership across views. |
 | [#15 Spreadsheet shortcuts](https://github.com/divamgupta/obsidian-spreadsheets/issues/15) | Mixed existing engine features and real integration defects | Current FortuneSheet provides fill-down and edge/range navigation. Obsidian intercepted F2 as Rename file; added a view-local F2 handler that opens the editor with the caret at the end. Added a view-local Mod+B bold toggle. F2 was verified in the installed app. |
@@ -42,7 +42,7 @@ This fork repairs defects in editing, persistence, integration, and builds. It a
 - **16 automated regression tests** cover dense/sparse compatibility, metadata, formula chains, typed currency, dates, CSV quoting, stylesheet isolation, stale callbacks, unmount cleanup, and file-save lifecycle.
 - **8 live Obsidian regression groups** cover untouched files, manual currency/formulas/dates, Excel HTML paste with multiple workbooks, viewport navigation, CSV/collision handling, close-during-edit, reopen/same-tab switches, and malformed-file preservation.
 - Added a build-time compatibility guard for FortuneSheet's delayed-focus callback after unmount, and a workbook-specific paste guard. Both fail the build if a future engine release changes the expected source sites.
-- Plugin 1.0.2 is installed and enabled locally. No upstream issues were closed or commented on.
+- Sheetian 1.0.3 is installed and enabled locally. No upstream issues were closed or commented on.
 - These checks do not establish full Excel compatibility, mobile support, or exhaustive testing of every formula, theme, or historic Obsidian release.
 
 Dependency audit retains the upstream UUID advisory and the Moment advisory from Obsidian's development dependency. The plugin bundles the engine's UUID v4 usage; the cited UUID issue concerns v3/v5/v6 caller-provided buffers. Obsidian and its Moment runtime remain external to the plugin bundle. No high/critical dependency findings remain in this build's audit.

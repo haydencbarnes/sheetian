@@ -1,17 +1,17 @@
-# Obsidian Spreadsheets
+# Sheetian
 
-Create and edit spreadsheet files inside **desktop Obsidian**. This fork of [Divam Gupta's plugin](https://github.com/divamgupta/obsidian-spreadsheets) uses [FortuneSheet](https://github.com/ruilisi/fortune-sheet) 1.0.4 and retains the existing JSON `.sheet` format.
+Create and edit spreadsheet files inside **desktop Obsidian**. Sheetian is based on [Divam Gupta's plugin](https://github.com/divamgupta/obsidian-spreadsheets), uses [FortuneSheet](https://github.com/ruilisi/fortune-sheet) 1.0.4 and retains the existing JSON `.sheet` format.
 
-The fork repairs data-loss and save lifecycle defects, preserves images, filters, formula chains and other workbook metadata, isolates its stylesheet, fixes paste ownership across multiple open workbooks, and resolves spreadsheet shortcuts intercepted by Obsidian. The full [upstream issue review](ISSUE_TRIAGE.md) documents what is fixed, already available, unconfirmed, or a separate feature request.
+Sheetian repairs data-loss and save lifecycle defects, preserves images, filters, formula chains and other workbook metadata, isolates its stylesheet, fixes paste ownership across multiple open workbooks, and resolves spreadsheet shortcuts intercepted by Obsidian. The full [upstream issue review](ISSUE_TRIAGE.md) documents what is fixed, already available, unconfirmed, or a separate feature request.
 
 ## Use
 
-1. Click the table ribbon icon or run **Spreadsheets: New spreadsheet**.
+1. Click the table ribbon icon or run **Sheetian: New spreadsheet**.
 2. Right-click a folder or file to create a spreadsheet in that folder.
 3. Edit cells, use formulas, format cells, insert images, and filter/sort with the spreadsheet toolbar.
-4. Run **Spreadsheets: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
+4. Run **Sheetian: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
 
-In **Settings → Spreadsheets**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
+In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
 
 - **F2** opens the current cell editor with the caret at the end.
 - **Cmd+B / Ctrl+B** toggles the selected cells' bold format.
@@ -32,7 +32,7 @@ npm test
 npm run build
 ```
 
-Copy **main.js**, **manifest.json**, and **styles.css** into `<vault>/.obsidian/plugins/spreadsheets/`, then enable **Spreadsheets** in Obsidian's Community plugins settings. The existing plugin ID is retained, so this fork replaces the original installation. Rebuild all three files together; `styles.css` is generated from the pinned engine and `spreadsheet.css`.
+Copy **main.js**, **manifest.json**, and **styles.css** into `<vault>/.obsidian/plugins/sheetian/`, then enable **Sheetian** in Obsidian's Community plugins settings. When migrating from Spreadsheets, disable that plugin first and copy its `data.json` into the Sheetian folder to preserve settings. Existing `.sheet` files remain compatible. Rebuild all three files together; `styles.css` is generated from the pinned engine and `spreadsheet.css`.
 
 The bundled JavaScript is generated and intentionally ignored by Git. Build-time compatibility patches in `engine-compat.mjs` guard known engine defects and must be reviewed when changing the engine version. The lockfile makes installs reproducible.
 
