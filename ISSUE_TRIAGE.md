@@ -39,10 +39,14 @@ Sheetian repairs defects in editing, persistence, integration, and builds. It al
 ## Validation
 
 - Production build succeeds, including TypeScript checking.
-- **20 automated regression tests** cover dense/sparse compatibility, metadata, formula chains, typed currency, dates, CSV quoting, stylesheet isolation, stale callbacks, unmount cleanup, file-save lifecycle, and AutoFit measurement/selection.
-- **14 live Obsidian regression groups** cover untouched files, manual currency/formulas/dates, Excel HTML paste with multiple workbooks, viewport navigation, CSV/collision handling, close-during-edit, reopen/same-tab switches, malformed-file preservation, and column AutoFit including multiple selections, undo/redo, persistence, scrolling, freezing, and zoom.
-- Build-time guards cover FortuneSheet's delayed focus, workbook paste ownership, and the column resize target. They fail the build if an engine upgrade changes the expected source sites.
-- Sheetian 1.0.4 is installed and enabled locally. No upstream issues were closed or commented on.
+- **23 automated regression tests** cover dense/sparse compatibility, metadata, formula chains, typed currency, dates, CSV quoting, stylesheet isolation, stale callbacks, unmount cleanup, file-save lifecycle, and AutoFit measurement/selection, and wheel scrolling under browser pixel rounding.
+- **18 live Obsidian regression groups** cover untouched files, manual currency/formulas/dates, Excel HTML paste with multiple workbooks, viewport navigation, CSV/collision handling, close-during-edit, reopen/same-tab switches, malformed-file preservation, and column AutoFit including multiple selections, undo/redo, persistence, scrolling, freezing, and zoom, plus returning to the top with zoomed/hidden/custom-height/frozen rows.
+- Build-time guards cover FortuneSheet's delayed focus, workbook paste ownership, the column resize target, and upward wheel-scroll rounding. They fail the build if an engine upgrade changes the expected source sites.
+- Sheetian 1.0.5 is installed and enabled locally. No upstream issues were closed or commented on.
 - These checks do not establish full Excel compatibility, mobile support, or exhaustive testing of every formula, theme, or historic Obsidian release.
 
 Dependency audit retains the upstream UUID advisory and the Moment advisory from Obsidian's development dependency. The plugin bundles the engine's UUID v4 usage; the cited UUID issue concerns v3/v5/v6 caller-provided buffers. Obsidian and its Moment runtime remain external to the plugin bundle. No high/critical dependency findings remain in this build's audit.
+
+## Additional local report
+
+- **Upward scrolling stuck after scrolling down (fixed in 1.0.5):** reproduced at 130% sheet zoom with Obsidian’s fractional display zoom. Chromium snaps scroll positions to physical pixels; an upward-rounded row boundary made FortuneSheet repeatedly select the same boundary. The wheel handler now accounts for half a physical pixel when locating the preceding row. Regression tests cover several pixel ratios/sheet zoom levels, bottom clamping, hidden/custom-height rows, and frozen rows.

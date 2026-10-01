@@ -24,3 +24,13 @@ export function patchColumnResizeTarget(source) {
 }
 
 export function patchEngine(source) { return patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))); }
+
+// Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
+// otherwise makes an upward wheel step select that same boundary forever.
+export function patchWheelScroll(source) {
+  const position = /var row_st = (_|___default\['default'\])\.sortedIndex\(visibledatarow_c, scrollTop\) \+ 1;/g;
+  if (source.match(position)?.length !== 1) throw new Error("Recheck FortuneSheet's upward wheel scroll patch.");
+  return source.replace(position, (_match, lodash) => `var scrollPixelRatio = scrollbarY.ownerDocument.defaultView.devicePixelRatio || 1;
+  var upwardRounding = e.deltaY < 0 ? 0.5 / scrollPixelRatio + 0.0001 : 0;
+  var row_st = ${lodash}.sortedIndex(visibledatarow_c, scrollTop - upwardRounding) + 1;`);
+}

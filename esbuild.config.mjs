@@ -3,7 +3,7 @@ import process from "process";
 import builtins from "builtin-modules";
 import { buildCss } from "./build-css.mjs";
 import { readFile } from "node:fs/promises";
-import { patchEngine } from "./engine-compat.mjs";
+import { patchEngine, patchWheelScroll } from "./engine-compat.mjs";
 
 const banner =
 `/*
@@ -25,6 +25,9 @@ const context = await esbuild.context({
 		setup(build) {
 			build.onLoad({ filter: /@fortune-sheet[\\/]react[\\/]dist[\\/]index(?:\.esm)?\.js$/ }, async args => ({
 				contents: patchEngine(await readFile(args.path, "utf8")), loader: "js",
+			}));
+			build.onLoad({ filter: /@fortune-sheet[\\/]core[\\/]dist[\\/]index(?:\.esm)?\.js$/ }, async args => ({
+				contents: patchWheelScroll(await readFile(args.path, "utf8")), loader: "js",
 			}));
 		},
 	}],
