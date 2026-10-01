@@ -23,7 +23,14 @@ export function patchColumnResizeTarget(source) {
   return source.replace(handle, '$&\n    "data-sheetian-column": allowEditRef.current ? hoverLocation.col_index : undefined,');
 }
 
-export function patchEngine(source) { return patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))); }
+export function patchRowResizeTarget(source) {
+  const handle = /className: "fortune-rows-change-size",/g;
+  if (source.match(handle)?.length !== 1) throw new Error("Recheck FortuneSheet's row resize target patch.");
+  const edit = source.includes("core.isAllowEdit(context)") ? "core.isAllowEdit" : "isAllowEdit";
+  return source.replace(handle, `$&\n    "data-sheetian-row": hoverLocation.row_index >= 0 && ${edit}(context) && ${edit}(context, [{ row: [hoverLocation.row_index, hoverLocation.row_index], column: [0, context.visibledatacolumn.length - 1] }]) ? hoverLocation.row_index : undefined,`);
+}
+
+export function patchEngine(source) { return patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.

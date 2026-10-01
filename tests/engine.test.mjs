@@ -30,6 +30,8 @@ test("the compatibility patch still matches the pinned engine's two distribution
     const patched = patchEngine(await readFile(`node_modules/@fortune-sheet/react/dist/${file}`, "utf8"));
     assert.match(patched, /if \(inputRef.current\?\.isConnected\)/);
     assert.match(patched, /"data-sheetian-column": allowEditRef.current \? hoverLocation.col_index : undefined/);
+    assert.match(patched, /"data-sheetian-row": hoverLocation.row_index >= 0 && (?:core\.)?isAllowEdit\(context\)/);
+    assert.ok(patched.includes(`&& ${file === "index.js" ? "core." : ""}isAllowEdit(context)`));
   }
   assert.throws(() => patchEngine("unexpected future engine"));
 });

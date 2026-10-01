@@ -8,6 +8,7 @@ import type { Op, Sheet } from "@fortune-sheet/core";
 import { parseSheets, serializeSheets, sheetToCsv } from "./sheet-data";
 import { normalizeInput } from "./input";
 import { autoFitColumns, cellFont, fitColumnWidth } from "./autofit";
+import { autoFitRows, fitRowHeight } from "./row-autofit";
 import type { SpreadsheetSettings } from "./settings";
 
 export const VIEW_TYPE_SPREADSHEET = "spreadsheet-view";
@@ -98,11 +99,12 @@ export class SpreadsheetView extends TextFileView {
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
     container.addEventListener("dblclick", event => {
-      const handle = (event.target as HTMLElement)?.closest<HTMLElement>(".fortune-cols-change-size");
-      const value = handle?.dataset.sheetianColumn;
+      const handle = (event.target as HTMLElement)?.closest<HTMLElement>(".fortune-cols-change-size, .fortune-rows-change-size");
+      const isRow = handle?.classList.contains("fortune-rows-change-size");
+      const value = isRow ? handle?.dataset.sheetianRow : handle?.dataset.sheetianColumn;
       if (!value || !container.contains(handle!) || generation !== this.generation) return;
-      const column = Number(value);
-      if (!Number.isInteger(column) || column < 0 || !this.workbook.current) return;
+      const index = Number(value);
+      if (!Number.isInteger(index) || index < 0 || !this.workbook.current) return;
       event.preventDefault();
       event.stopPropagation();
       this.commitInput();
@@ -110,8 +112,14 @@ export class SpreadsheetView extends TextFileView {
       const sheet = api.getSheet();
       const canvas = container.ownerDocument.createElement("canvas").getContext("2d");
       if (!canvas) return;
+      if (isRow) {
+        const heights: Record<string, number> = {};
+        for (const r of autoFitRows(sheet, index, api.getSelection())) heights[r] = fitRowHeight(sheet, r, canvas);
+        api.setRowHeight(heights, { id: sheet.id }, true);
+        return;
+      }
       const widths: Record<string, number> = {};
-      for (const c of autoFitColumns(sheet, column, api.getSelection())) {
+      for (const c of autoFitColumns(sheet, index, api.getSelection())) {
         widths[c] = fitColumnWidth(sheet, c, (text, style) => {
           canvas.font = cellFont(style);
           return canvas.measureText(text).width;

@@ -14,6 +14,7 @@ Sheetian repairs data-loss and save lifecycle defects, preserves images, filters
 In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
 
 - **Double-click a column header’s right edge** to fit its contents. Select several column headers first to fit them all. Widths account for displayed values, font sizes, bold/italic text, and explicit line breaks; horizontally merged cells are excluded.
+- **Double-click a row header’s bottom edge** to fit its height. Select several row headers first to fit them all. Heights account for wrapped text at the current column widths, line breaks, and fonts/rich text. Cells merged across columns use their combined width; cells merged across rows are excluded. Heights support undo/redo and persist after reopening.
 - **F2** opens the current cell editor with the caret at the end.
 - **Cmd+B / Ctrl+B** toggles the selected cells' bold format.
 - **Alt+Enter** inserts a line break while editing a cell. Use the toolbar's text-wrap setting to display wrapped content.
