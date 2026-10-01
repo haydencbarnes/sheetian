@@ -13,6 +13,7 @@ Sheetian repairs data-loss and save lifecycle defects, preserves images, filters
 
 In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
 
+- **Double-click a column header’s right edge** to fit its contents. Select several column headers first to fit them all. Widths account for displayed values, font sizes, bold/italic text, and explicit line breaks; horizontally merged cells are excluded.
 - **F2** opens the current cell editor with the caret at the end.
 - **Cmd+B / Ctrl+B** toggles the selected cells' bold format.
 - **Alt+Enter** inserts a line break while editing a cell. Use the toolbar's text-wrap setting to display wrapped content.
@@ -38,6 +39,6 @@ The bundled JavaScript is generated and intentionally ignored by Git. Build-time
 
 ## Scope
 
-This is a desktop plugin. Mobile compatibility, Google Sheets/XLSX formula-preserving import, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, double-click column autofit, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
+This is a desktop plugin. Mobile compatibility, Google Sheets/XLSX formula-preserving import, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
 
 Use GitHub issues for support. The plugin is MIT-licensed; original author: Divam Gupta.

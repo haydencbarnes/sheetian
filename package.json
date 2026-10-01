@@ -1,6 +1,6 @@
 {
 	"name": "sheetian",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"description": "Plugin to create spreadsheets in Obsidian.",
 	"main": "main.js",
 	"scripts": {

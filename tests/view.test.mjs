@@ -14,7 +14,7 @@ class Element {
     observe() {}
     disconnect() { this.disconnected = true; }
   }, Event: class {}, dispatchEvent() {} }, activeElement: null };
-  empty() {} addClass() {} createEl() {} createDiv() { return new Element(); } contains() { return false; } querySelector() { return null; }
+  empty() {} addClass() {} createEl() {} createDiv() { return new Element(); } addEventListener() {} contains() { return false; } querySelector() { return null; }
 }
 class TextFileView {
   app = { scope: {} };

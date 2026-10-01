@@ -7,6 +7,7 @@ import type { WorkbookInstance } from "@fortune-sheet/react/dist/components/Work
 import type { Op, Sheet } from "@fortune-sheet/core";
 import { parseSheets, serializeSheets, sheetToCsv } from "./sheet-data";
 import { normalizeInput } from "./input";
+import { autoFitColumns, cellFont, fitColumnWidth } from "./autofit";
 import type { SpreadsheetSettings } from "./settings";
 
 export const VIEW_TYPE_SPREADSHEET = "spreadsheet-view";
@@ -90,6 +91,28 @@ export class SpreadsheetView extends TextFileView {
     container.dataset.theme = settings.theme;
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
+    container.addEventListener("dblclick", event => {
+      const handle = (event.target as HTMLElement)?.closest<HTMLElement>(".fortune-cols-change-size");
+      const value = handle?.dataset.sheetianColumn;
+      if (!value || !container.contains(handle!) || generation !== this.generation) return;
+      const column = Number(value);
+      if (!Number.isInteger(column) || column < 0 || !this.workbook.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.commitInput();
+      const api = this.workbook.current;
+      const sheet = api.getSheet();
+      const canvas = container.ownerDocument.createElement("canvas").getContext("2d");
+      if (!canvas) return;
+      const widths: Record<string, number> = {};
+      for (const c of autoFitColumns(sheet, column, api.getSelection())) {
+        widths[c] = fitColumnWidth(sheet, c, (text, style) => {
+          canvas.font = cellFont(style);
+          return canvas.measureText(text).width;
+        });
+      }
+      api.setColumnWidth(widths, { id: sheet.id }, true);
+    }, true);
     this.root = createRoot(container);
     this.root.render(<Workbook
       ref={this.workbook} data={this.sheets} lang="en" currency={settings.currency}

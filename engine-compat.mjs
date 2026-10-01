@@ -15,4 +15,12 @@ export function patchPasteOwnership(source) {
   return source.replace(start, match => match.replace("\n", "\n    if (!workbookContainer.current?.contains(document.activeElement)) return;\n"));
 }
 
-export function patchEngine(source) { return patchPasteOwnership(patchDelayedFocus(source)); }
+// Expose the engine's hit-tested column, including frozen/scrolled columns.
+// Keeping this on the existing resize handle avoids duplicating its geometry.
+export function patchColumnResizeTarget(source) {
+  const handle = /id: "fortune-cols-change-size",/g;
+  if (source.match(handle)?.length !== 1) throw new Error("Recheck FortuneSheet's column resize target patch.");
+  return source.replace(handle, '$&\n    "data-sheetian-column": allowEditRef.current ? hoverLocation.col_index : undefined,');
+}
+
+export function patchEngine(source) { return patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))); }

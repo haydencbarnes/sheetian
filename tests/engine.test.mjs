@@ -29,6 +29,7 @@ test("the compatibility patch still matches the pinned engine's two distribution
   for (const file of ["index.js", "index.esm.js"]) {
     const patched = patchEngine(await readFile(`node_modules/@fortune-sheet/react/dist/${file}`, "utf8"));
     assert.match(patched, /if \(inputRef.current\?\.isConnected\)/);
+    assert.match(patched, /"data-sheetian-column": allowEditRef.current \? hoverLocation.col_index : undefined/);
   }
   assert.throws(() => patchEngine("unexpected future engine"));
 });
