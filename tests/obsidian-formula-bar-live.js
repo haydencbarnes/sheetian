@@ -30,7 +30,9 @@
     assert(view.getViewData()===before&&input().innerText===formula,'Resizing changed file contents or formula source');
     second=app.workspace.getLeaf(true);await second.openFile(file);await wait(400);assert(second.view.contentEl.querySelector('.fortune-fx-editor').offsetHeight===29,'Height leaked into another pane');await second.detach();second=null;app.workspace.setActiveLeaf(leaf,{focus:true});await wait(150);
     results.push('Resizing is independent per pane and leaves workbook data untouched');
-    input().focus();await wait(100);input().innerText=formula+'+1';
+    // Opening a second pane can restore DOM focus after clearing edit state.
+    // Start a fresh focus session, as a user clicking back into the bar would.
+    input().blur();await wait(50);input().focus();await wait(100);input().innerText=formula+'+1';
     toggle().dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true,cancelable:true}));toggle().click();await wait(100);assert(input().innerText===formula+'+1','Resize discarded the pending formula');
     input().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));await wait(150);
     await until(()=>view.workbook.current.getSheet().data[0][0].v===7);
