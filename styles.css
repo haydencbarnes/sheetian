@@ -3478,3 +3478,67 @@
   padding: 1rem;
   color: var(--text-error);
 }
+
+.obsidian-spreadsheet .fortune-fx-editor {
+  position: relative;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  min-height: 29px;
+  padding-bottom: 5px;
+}
+.obsidian-spreadsheet .fortune-fx-input-container {
+  min-width: 0;
+  min-height: 0;
+}
+.obsidian-spreadsheet .fortune-fx-input {
+  min-width: 0;
+  min-height: 0;
+  padding: 5px 30px 3px 3px;
+  line-height: 18px;
+  overflow: auto;
+}
+.obsidian-spreadsheet .sheetian-formula-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 1px;
+  right: 2px;
+  width: 24px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+  background: #fff;
+  color: #555;
+  cursor: pointer;
+  font: 18px/22px sans-serif;
+}
+.obsidian-spreadsheet .sheetian-formula-toggle:hover {
+  background: #eee;
+}
+.obsidian-spreadsheet .sheetian-formula-resize {
+  position: absolute;
+  z-index: 3;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  border-bottom: 1px solid #d4d4d4;
+}
+.obsidian-spreadsheet .sheetian-formula-resize::after {
+  content: "";
+  position: absolute;
+  left: calc(50% - 16px);
+  top: 2px;
+  width: 32px;
+  border-top: 2px solid #aaa;
+}
+.obsidian-spreadsheet .sheetian-formula-resize:hover,
+.obsidian-spreadsheet .sheetian-formula-resize:focus-visible {
+  background: #e5e5e5;
+  outline: 1px solid #777;
+}

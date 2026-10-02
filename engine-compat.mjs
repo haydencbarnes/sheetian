@@ -30,7 +30,26 @@ export function patchRowResizeTarget(source) {
   return source.replace(handle, `$&\n    "data-sheetian-row": hoverLocation.row_index >= 0 && ${edit}(context) && ${edit}(context, [{ row: [hoverLocation.row_index, hoverLocation.row_index], column: [0, context.visibledatacolumn.length - 1] }]) ? hoverLocation.row_index : undefined,`);
 }
 
-export function patchEngine(source) { return patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))); }
+// Keep formula-bar layout in the engine's context so canvas geometry and mouse
+// hit testing track the visible bar height. The controls never edit sheet data.
+export function patchFormulaBar(source) {
+  const editor = /className: "fortune-fx-editor"/g;
+  const children = /\}, \/\*#__PURE__\*\/(React(?:__default\['default'\])?)\.createElement\(LocationBox, null\)/g;
+  const canvas = /context\.rowHeaderWidth, context\.columnHeaderHeight, context\.devicePixelRatio\]\);/g;
+  for (const site of [editor, children, canvas]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's resizable formula bar compatibility patch.");
+  }
+  source = source.replace(editor, '$&, style: { height: context.calculatebarHeight }');
+  source = source.replace(children, (_match, react) => `}, ${react}.createElement(FormulaBarControls, {
+    height: context.calculatebarHeight,
+    workbookRef: refs.workbookContainer,
+    onResize: function (height) { setContext(function (ctx) { ctx.calculatebarHeight = height; }); }
+  }), ${react}.createElement(LocationBox, null)`);
+  source = source.replace(canvas, 'context.rowHeaderWidth, context.columnHeaderHeight, context.devicePixelRatio, context.calculatebarHeight]);');
+  return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
+}
+
+export function patchEngine(source) { return patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
