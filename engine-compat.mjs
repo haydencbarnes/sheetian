@@ -45,7 +45,22 @@ export function patchFormulaBar(source) {
     workbookRef: refs.workbookContainer,
     onResize: function (height) { setContext(function (ctx) { ctx.calculatebarHeight = height; }); }
   }), ${react}.createElement(LocationBox, null)`);
-  source = source.replace(canvas, 'context.rowHeaderWidth, context.columnHeaderHeight, context.devicePixelRatio, context.calculatebarHeight]);');
+  const effect = source.includes("var placeholderRef = React.useRef(null);") ? "React.useEffect" : "useEffect";
+  const updateCanvas = effect.startsWith("React.") ? "core.updateContextWithCanvas" : "updateContextWithCanvas";
+  source = source.replace(canvas, `context.rowHeaderWidth, context.columnHeaderHeight, context.devicePixelRatio, context.calculatebarHeight]);
+  ${effect}(function () {
+    var placeholder = placeholderRef.current;
+    if (!placeholder) return;
+    var observer = new placeholder.ownerDocument.defaultView.ResizeObserver(function () {
+      if (!placeholder.isConnected || !refs.canvas.current) return;
+      setContext(function (ctx) {
+        if (ctx.luckysheetTableContentHW[0] === placeholder.clientWidth && ctx.luckysheetTableContentHW[1] === placeholder.clientHeight) return;
+        ${updateCanvas}(ctx, refs.canvas.current, placeholder);
+      });
+    });
+    observer.observe(placeholder);
+    return function () { observer.disconnect(); };
+  }, [refs.canvas, setContext, context.currentSheetId, context.devicePixelRatio]);`);
   return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
 }
 
