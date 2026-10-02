@@ -8,7 +8,7 @@ Sheetian repairs data-loss and save lifecycle defects, preserves images, filters
 
 1. Click the table ribbon icon or run **Sheetian: New spreadsheet**.
 2. Right-click a folder or file to create a spreadsheet in that folder.
-3. Edit cells, use formulas, format cells, insert images, and filter/sort with the spreadsheet toolbar. Drag the formula bar's bottom edge to make it taller or shorter, or click its right-hand chevron to expand/collapse. The resize grip supports arrow keys and Home/End.
+3. Use the **File, Edit, View, Insert, Format, Data, Tools, and Help** menus above the formatting toolbar for import/export, editing, layout, sorting/filtering, and help. Edit cells, use formulas, format cells, and insert images with the spreadsheet toolbar. Drag the formula bar's bottom edge to make it taller or shorter, or click its right-hand chevron to expand/collapse. The resize grip supports arrow keys and Home/End.
 4. Run **Sheetian: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
 
 In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
@@ -27,7 +27,7 @@ Files that cannot be parsed show an error and preserve their original contents. 
 ## Import from Google Sheets or Excel
 
 1. In Google Sheets, choose **File → Download → Microsoft Excel (.xlsx)**. Existing Excel `.xlsx` workbooks can be imported directly.
-2. In Obsidian, open a sheet's **⋯** menu at the top right and choose **Import Excel workbook (.xlsx)**, or run **Sheetian: Import Excel workbook (.xlsx)** from the command palette. Select the downloaded file. Alternatively, right-click an `.xlsx` file already in your vault and choose **Import into Sheetian**.
+2. In Obsidian, choose **File → Import Excel workbook (.xlsx)** from the sheet's menu bar, open a sheet's **⋯** menu at the top right and choose **Import Excel workbook (.xlsx)**, or run **Sheetian: Import Excel workbook (.xlsx)** from the command palette. Select the downloaded file. Alternatively, right-click an `.xlsx` file already in your vault and choose **Import into Sheetian**.
 3. Sheetian creates a new `.sheet` workbook and opens it. The command uses the default folder from Settings; the context-menu action uses the source file's folder. Repeated imports receive numbered filenames.
 
 The importer retains worksheet tabs, ordinary and shared formulas, cross-tab references, cached results, numeric/date formats, basic fonts/alignment/solid colors, rich text, hyperlinks, merged cells, row/column sizes, hidden rows/columns/tabs, and frozen panes. Supported formulas recalculate when their inputs change. `TEXT()` supports Excel number/date formats, including currency messages inside `IF()` formulas. Formula text results keep their text type instead of being interpreted as numeric input. Double-clicking and committing a formula retains its formula source, including formulas formatted across several lines. Formulas without cached results are calculated on import. Import uses [ExcelJS](https://github.com/exceljs/exceljs).

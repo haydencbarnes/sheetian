@@ -20,7 +20,7 @@ export default class SpreadsheetPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...await this.loadData() };
-    this.registerView(VIEW_TYPE_SPREADSHEET, (leaf: WorkspaceLeaf) => new SpreadsheetView(leaf, () => this.settings, () => this.chooseImportFile()));
+    this.registerView(VIEW_TYPE_SPREADSHEET, (leaf: WorkspaceLeaf) => new SpreadsheetView(leaf, () => this.settings, () => this.chooseImportFile(), () => { void this.createSpreadsheet(); }));
     this.registerExtensions(["sheet"], VIEW_TYPE_SPREADSHEET);
     this.addSettingTab(new SpreadsheetSettingTab(this.app, this));
     this.addRibbonIcon("table", "New spreadsheet", () => { void this.createSpreadsheet(); });

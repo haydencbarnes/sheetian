@@ -64,7 +64,17 @@ export function patchFormulaBar(source) {
   return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
 }
 
-export function patchEngine(source) { return patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))); }
+export function patchMenuActions(source) {
+  const apiMethod = /    calculateFormula: function calculateFormula\(id, range\) \{/g;
+  if (source.match(apiMethod)?.length !== 1) throw new Error("Recheck FortuneSheet's menu action compatibility patch.");
+  source = source.replace(apiMethod, `    runMenuAction: function (action, payload) {
+      return setContext(function (ctx) { runMenuAction(ctx, action, cellInput, payload); });
+    },
+$&`);
+  return 'import { runMenuAction } from ' + JSON.stringify(new URL("./menu-actions.ts", import.meta.url).pathname) + ';\n' + source;
+}
+
+export function patchEngine(source) { return patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
@@ -145,4 +155,21 @@ $&`);
   return source.replace(brackets, 'if (!checkBracketNum(txt) && checkBracketNum(txt + ")")) {');
 }
 
-export function patchCore(source) { return patchTextFormula(patchFormulaEditing(patchWheelScroll(source))); }
+// Menu copy uses the desktop clipboard while keeping the engine's selection,
+// merge checks and formula-aware internal copy state. Keyboard copy retains
+// the existing writer. An optional writer avoids focusing a hidden DOM editor.
+export function patchCopyWriter(source) {
+  const sites = [
+    [/function copy\(ctx\) \{/g, "function copy(ctx, writeClipboard) {"],
+    [/function handleCopy\(ctx\) \{/g, "function handleCopy(ctx, writeClipboard) {"],
+    [/  copy\(ctx\);\n  ctx\.luckysheet_paste_iscut = false;/g, "  copy(ctx, writeClipboard);\n  ctx.luckysheet_paste_iscut = false;"],
+    [/    clipboard\.writeHtml\(cpdata\);/g, "    (writeClipboard || clipboard.writeHtml)(cpdata);"],
+  ];
+  for (const [site, replacement] of sites) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's menu clipboard compatibility patch.");
+    source = source.replace(site, replacement);
+  }
+  return source;
+}
+
+export function patchCore(source) { return patchCopyWriter(patchTextFormula(patchFormulaEditing(patchWheelScroll(source)))); }

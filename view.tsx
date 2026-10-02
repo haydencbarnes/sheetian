@@ -1,4 +1,4 @@
-import { Menu, Notice, Scope, TextFileView, TFile, WorkspaceLeaf } from "obsidian";
+import { Menu, Modal, Notice, Scope, TextFileView, TFile, WorkspaceLeaf } from "obsidian";
 import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -10,6 +10,8 @@ import { normalizeInput } from "./input";
 import { autoFitColumns, cellFont, fitColumnWidth } from "./autofit";
 import { autoFitRows, fitRowHeight } from "./row-autofit";
 import type { SpreadsheetSettings } from "./settings";
+import { mountMenuBar, type SheetMenu, type SheetMenuItem } from "./menu-bar";
+import type { MenuPayload } from "./menu-actions";
 
 export const VIEW_TYPE_SPREADSHEET = "spreadsheet-view";
 
@@ -19,11 +21,12 @@ export class SpreadsheetView extends TextFileView {
   private edited = false;
   private generation = 0;
   private root: Root | null = null;
+  private disposeMenu: (() => void) | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private resizeFrame: number | null = null;
   private workbook = React.createRef<WorkbookInstance>();
 
-  constructor(leaf: WorkspaceLeaf, private settings: () => SpreadsheetSettings, private importFile?: () => void) {
+  constructor(leaf: WorkspaceLeaf, private settings: () => SpreadsheetSettings, private importFile?: () => void, private newFile?: () => void) {
     super(leaf);
     this.scope = new Scope(this.app.scope);
     // Obsidian otherwise handles F2 as Rename file before the grid sees it.
@@ -93,11 +96,24 @@ export class SpreadsheetView extends TextFileView {
   }
 
   private renderWorkbook(): void {
+    const generationForMenu = this.generation;
+    this.disposeMenu = mountMenuBar(this.contentEl, ["File", "Edit", "View", "Insert", "Format", "Data", "Tools", "Help"],
+      () => this.sheetMenus(generationForMenu), () => this.prepareMenu());
     const container = this.contentEl.createDiv({ cls: "obsidian-spreadsheet" });
     const settings = this.settings();
     container.dataset.theme = settings.theme;
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
+    container.addEventListener("keydown", event => {
+      const editor = (event.target as HTMLElement)?.closest<HTMLDivElement>(".fortune-fx-input");
+      if (event.key !== "Enter" || !editor || !container.contains(editor) || generation !== this.generation || !this.workbook.current) return;
+      // The mirrored grid editor can clear the engine's editing flag during
+      // resizing/focus changes. Commit the actual focused formula input even
+      // in that state, then use the engine's usual Enter navigation.
+      event.preventDefault(); event.stopImmediatePropagation();
+      const api = this.workbook.current as WorkbookInstance & { runMenuAction: (action: string, payload?: MenuPayload) => void };
+      flushSync(() => api.runMenuAction("commit-formula", { editor, moveDown: true }));
+    }, true);
     container.addEventListener("dblclick", event => {
       const handle = (event.target as HTMLElement)?.closest<HTMLElement>(".fortune-cols-change-size, .fortune-rows-change-size");
       const isRow = handle?.classList.contains("fortune-rows-change-size");
@@ -170,6 +186,119 @@ export class SpreadsheetView extends TextFileView {
     this.resizeObserver.observe(container);
   }
 
+  private prepareMenu(): void {
+    // Commit an active draft before opening a command menu, then restore the
+    // selection so formatting/insertion applies to the same cells.
+    const selection = this.workbook.current?.getSelection();
+    const input = this.contentEl.querySelector<HTMLElement>(".fortune-fx-input");
+    if (input && this.contentEl.ownerDocument.activeElement === input) {
+      const workbook = this.workbook.current as (WorkbookInstance & { runMenuAction: (action: string, payload?: MenuPayload) => void }) | null;
+      // Commit through the same engine update as Enter, without moving to the
+      // next row or triggering a second commit from the mirrored grid editor.
+      flushSync(() => workbook?.runMenuAction("commit-formula", { editor: input as HTMLDivElement }));
+      flushSync(() => input.blur());
+    } else this.commitInput();
+    if (selection?.length) flushSync(() => this.workbook.current?.setSelection(selection));
+  }
+
+  private sheetMenus(generation: number): SheetMenu[] {
+    const api = this.workbook.current;
+    const sheet = api?.getSheet();
+    const selection = api?.getSelection() ?? [];
+    const selected = !!api && !!selection.length;
+    const item = (title: string, action: () => void | Promise<void>, disabled = false, checked?: boolean): SheetMenuItem => ({
+      title, disabled, checked, action: () => { if (generation !== this.generation) return; return action(); },
+    });
+    const command = (action: string, payload?: MenuPayload) => {
+      const workbook = this.workbook.current as (WorkbookInstance & { runMenuAction: (action: string, payload?: MenuPayload) => void }) | null;
+      workbook?.runMenuAction(action, payload);
+    };
+    const action = (title: string, name: string, checked?: boolean) => item(title, () => command(name), !selected, checked);
+    const copy = (title: string, name: "copy" | "cut") => item(title, () => command(name, { writeClipboard: html => {
+      const table = this.contentEl.ownerDocument.createElement("div"); table.innerHTML = html;
+      const text = Array.from(table.querySelectorAll("tr"), row => Array.from(row.querySelectorAll("td, th"), cell => cell.textContent ?? "").join("\t")).join("\n");
+      require("electron").clipboard.write({ html, text });
+    } }), !selected);
+    const format = (title: string, attr: "ht" | "vt" | "tb", value: number | string) => item(title,
+      () => { const workbook = this.workbook.current; const ranges = workbook?.getSelection(); if (ranges?.length) workbook!.setCellFormatByRange(attr, value, ranges); }, !selected);
+    const insert = (title: string, type: "row" | "column", direction: "lefttop" | "rightbottom") => item(title, () => {
+      const workbook = this.workbook.current, ranges = workbook?.getSelection();
+      if (!workbook || !ranges?.length) return;
+      const indices = ranges[0][type];
+      workbook.insertRowOrColumn(type, direction === "lefttop" ? indices[0] : indices[1], indices[1] - indices[0] + 1, direction);
+    }, !selected || selection.length !== 1);
+    const cells = selection.length ? sheet?.data?.[selection[0].row[0]]?.[selection[0].column[0]] : null;
+    return [
+      { title: "File", items: [
+        item("New spreadsheet", () => this.newFile?.(), !this.newFile),
+        item("Import Excel workbook (.xlsx)", () => this.importFile?.(), !this.importFile),
+        item("Export active sheet to CSV", () => this.exportCsv(), !api), null,
+        item("Save", () => this.save()),
+      ] },
+      { title: "Edit", items: [
+        item("Undo", () => this.workbook.current?.handleUndo(), !api),
+        item("Redo", () => this.workbook.current?.handleRedo(), !api), null,
+        copy("Cut", "cut"), copy("Copy", "copy"), item("Paste", () => {
+          const clipboard = require("electron").clipboard;
+          const document = this.contentEl.ownerDocument, win = document.defaultView!;
+          const data = new win.DataTransfer(); data.setData("text/html", clipboard.readHTML()); data.setData("text/plain", clipboard.readText());
+          command("paste", { clipboard: new win.ClipboardEvent("paste", { clipboardData: data }) });
+        }, !selected), null,
+        action("Select all", "select-all"), action("Clear contents", "clear-contents"), null,
+        action("Find", "find"), action("Find and replace", "replace"),
+      ] },
+      { title: "View", items: [
+        action("Gridlines", "gridlines", sheet?.showGridLines !== false && sheet?.showGridLines !== 0),
+        item("Expand/collapse formula bar", () => this.contentEl.querySelector<HTMLButtonElement>(".sheetian-formula-toggle")?.click(), !api), null,
+        ...[0.5, 0.75, 1, 1.25, 1.5, 2].map(zoom => item(`Zoom ${zoom * 100}%`, () => command("zoom", { zoom }), !api, (sheet?.zoomRatio ?? 1) === zoom)), null,
+        action("Freeze through selected row", "freeze-row"), action("Freeze through selected column", "freeze-col"), action("Unfreeze rows and columns", "freeze-cancel"),
+      ] },
+      { title: "Insert", items: [
+        insert("Rows above", "row", "lefttop"), insert("Rows below", "row", "rightbottom"),
+        insert("Columns left", "column", "lefttop"), insert("Columns right", "column", "rightbottom"), null,
+        item("New worksheet", () => this.workbook.current?.addSheet(), !api), action("Link", "link"),
+      ] },
+      { title: "Format", items: [
+        action("Bold", "bold", cells?.bl === 1), action("Italic", "italic", cells?.it === 1), action("Underline", "underline", cells?.un === 1), action("Strikethrough", "strike-through", cells?.cl === 1), null,
+        action("Currency", "currency-format"), action("Percent", "percentage-format"), action("More decimal places", "number-increase"), action("Fewer decimal places", "number-decrease"), null,
+        format("Align left", "ht", 1), format("Align center", "ht", 0), format("Align right", "ht", 2),
+        format("Wrap text", "tb", "2"), format("Clip text", "tb", "1"), format("Overflow text", "tb", "0"), null,
+        item("Merge selected cells", () => this.workbook.current?.mergeCells(selection, "merge-all"), !selected),
+        item("Unmerge selected cells", () => this.workbook.current?.cancelMerge(selection), !selected), action("Clear formatting", "clear-format"),
+      ] },
+      { title: "Data", items: [
+        item("Sort selection A → Z", () => command("sort-asc"), !selected || selection.length !== 1),
+        item("Sort selection Z → A", () => command("sort-desc"), !selected || selection.length !== 1), null,
+        action("Create filter", "filter"), action("Remove filter", "clear-filter"),
+      ] },
+      { title: "Tools", items: [action("Find and replace", "replace"), null,
+        item("Fit selected columns", () => this.fitMenuSelection("column"), !selected),
+        item("Fit selected rows", () => this.fitMenuSelection("row"), !selected),
+      ] },
+      { title: "Help", items: [item("Sheetian help", () => {
+        const modal = new Modal(this.app); modal.titleEl.setText("Sheetian help");
+        for (const tip of ["Edits save automatically when committed. Press Enter to commit or Escape to cancel.", "Import Google Sheets by downloading Microsoft Excel (.xlsx), then choosing File → Import.", "Drag the formula bar's bottom grip to resize it. The chevron expands or collapses it.", "Double-click a row or column header boundary to fit its contents.", "To sync .sheet files, enable Sync all other types in Obsidian Sync on each device."]) modal.contentEl.createEl("p", { text: tip });
+        modal.open();
+      }), item("Sheetian source on GitHub", () => { this.contentEl.ownerDocument.defaultView!.open("https://github.com/haydencbarnes/sheetian", "_blank", "noopener,noreferrer"); })] },
+    ];
+  }
+
+  private fitMenuSelection(type: "row" | "column"): void {
+    const api = this.workbook.current;
+    if (!api) return;
+    const sheet = api.getSheet(), selection = api.getSelection() ?? [];
+    const canvas = this.contentEl.ownerDocument.createElement("canvas").getContext("2d");
+    if (!canvas) return;
+    const sizes: Record<string, number> = {};
+    const maximum = type === "row" ? sheet.data?.length ?? 0 : Math.max(0, ...sheet.data?.map(row => row.length) ?? []);
+    for (const range of selection) for (let n = range[type][0]; n <= Math.min(range[type][1], maximum - 1); n++) {
+      if ((type === "row" ? sheet.config?.rowhidden : sheet.config?.colhidden)?.[n] != null) continue;
+      sizes[n] = type === "row" ? fitRowHeight(sheet, n, canvas) : fitColumnWidth(sheet, n, (text, style) => { canvas.font = cellFont(style); return canvas.measureText(text).width; });
+    }
+    if (type === "row") api.setRowHeight(sizes, { id: sheet.id }, true);
+    else api.setColumnWidth(sizes, { id: sheet.id }, true);
+  }
+
   private commitInput(): void {
     // A cell still being edited has not reached onChange yet.
     const input = this.contentEl.querySelector<HTMLElement>(".luckysheet-cell-input");
@@ -203,6 +332,8 @@ export class SpreadsheetView extends TextFileView {
 
   private disposeWorkbook(): void {
     this.generation++;
+    this.disposeMenu?.();
+    this.disposeMenu = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     if (this.resizeFrame !== null) this.contentEl.ownerDocument.defaultView?.cancelAnimationFrame(this.resizeFrame);
