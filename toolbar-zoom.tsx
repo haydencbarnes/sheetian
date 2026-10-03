@@ -35,6 +35,7 @@ export function ToolbarZoom({ zoom, sheetId, onZoom }: Props): JSX.Element {
   };
   return <div className="sheetian-toolbar-zoom fortune-toolbar-item" title="Zoom">
     <input className="sheetian-zoom-input" type="text" inputMode="decimal"
+      style={{ width: `calc(${Math.max(4, Math.min(10, draft.length))}ch + 12px)` }}
       aria-label="Zoom percentage" value={draft} spellCheck={false}
       onFocus={event => event.currentTarget.select()}
       onChange={event => { dirty.current = true; setDraft(event.currentTarget.value); }}
