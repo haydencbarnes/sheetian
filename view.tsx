@@ -3,6 +3,7 @@ import * as React from "react";
 import { createRoot, Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { Workbook } from "@fortune-sheet/react";
+import { defaultSettings } from "@fortune-sheet/core";
 import type { WorkbookInstance } from "@fortune-sheet/react/dist/components/Workbook";
 import type { Op, Sheet } from "@fortune-sheet/core";
 import { parseSheets, serializeSheets, sheetToCsv } from "./sheet-data";
@@ -146,6 +147,7 @@ export class SpreadsheetView extends TextFileView {
     this.root = createRoot(container);
     this.root.render(<Workbook
       ref={this.workbook} data={this.sheets} lang="en" currency={settings.currency}
+      toolbarItems={defaultSettings.toolbarItems.filter(item => item !== "clear-format")}
       onChange={(sheets: Sheet[]) => {
         if (generation !== this.generation) return;
         this.sheets = sheets;
