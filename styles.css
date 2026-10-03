@@ -3573,14 +3573,14 @@
 .obsidian-spreadsheet-view .sheetian-menu-bar .sheetian-menu-button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
 
 .obsidian-spreadsheet .sheetian-toolbar-zoom {
-  appearance: auto;
-  background-image: none;
+  display: flex;
+  position: relative;
   flex: 0 0 auto;
-  width: 68px;
+  width: 80px;
   height: 26px;
   min-height: 0;
   margin: 0 3px;
-  padding: 0 5px;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 3px;
   box-shadow: none;
@@ -3590,8 +3590,45 @@
   cursor: pointer;
 }
 .obsidian-spreadsheet .sheetian-toolbar-zoom:hover { background-color: #efefef; }
-.obsidian-spreadsheet .sheetian-toolbar-zoom:focus-visible {
+.obsidian-spreadsheet .sheetian-toolbar-zoom:focus-within {
   border-color: #5074d0;
   outline: 1px solid #5074d0;
   outline-offset: -1px;
+}
+.obsidian-spreadsheet .sheetian-zoom-input {
+  width: calc(100% - 20px);
+  height: 100%;
+  min-height: 0;
+  padding: 0 5px;
+  margin: 0;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.obsidian-spreadsheet .sheetian-zoom-picker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 100%;
+}
+.obsidian-spreadsheet .sheetian-zoom-picker::after {
+  content: "⌄";
+  display: block;
+  text-align: center;
+  font: 16px/22px Arial, sans-serif;
+  pointer-events: none;
+}
+.obsidian-spreadsheet .sheetian-zoom-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
 }

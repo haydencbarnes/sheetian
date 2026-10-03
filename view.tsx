@@ -105,13 +105,15 @@ export class SpreadsheetView extends TextFileView {
     container.dataset.theme = settings.theme;
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
-    // Native selects move focus before changing their value. Commit a draft
+    // Zoom controls move focus before changing their value. Commit a draft
     // before mouse or keyboard focus reaches zoom, just as the menus do.
     container.addEventListener("mousedown", event => {
-      if (generation === this.generation && (event.target as HTMLElement)?.closest(".sheetian-toolbar-zoom")) this.prepareMenu();
+      const zoom = (event.target as HTMLElement)?.closest(".sheetian-toolbar-zoom");
+      if (generation === this.generation && zoom && !zoom.contains(container.ownerDocument.activeElement)) this.prepareMenu();
     }, true);
     container.addEventListener("blur", event => {
-      if (generation === this.generation && (event.relatedTarget as HTMLElement | null)?.matches?.(".sheetian-toolbar-zoom")) {
+      if (generation === this.generation && (event.relatedTarget as HTMLElement | null)?.closest?.(".sheetian-toolbar-zoom")
+          && !(event.target as HTMLElement)?.closest(".sheetian-toolbar-zoom")) {
         this.prepareMenu(event.target as HTMLElement);
       }
     }, true);

@@ -11,10 +11,10 @@
   let leaf=app.workspace.getLeaf(true),second;
   try {
     await leaf.openFile(file);app.workspace.setActiveLeaf(leaf,{focus:true});await wait(400);
-    const view=()=>leaf.view,api=()=>view().workbook.current,dropdown=()=>view().contentEl.querySelector('.sheetian-toolbar-zoom');
+    const view=()=>leaf.view,api=()=>view().workbook.current,control=()=>view().contentEl.querySelector('.sheetian-toolbar-zoom'),dropdown=()=>control().querySelector('select'),field=()=>control().querySelector('input');
     const choose=async value=>{const select=dropdown();select.value=String(value);select.dispatchEvent(new Event('change',{bubbles:true}));await wait(120);};
     const first=dropdown(),painter=view().contentEl.querySelector('.fortune-toolbar [data-tips="Format-Painter"]');
-    assert(first&&first.previousElementSibling===painter,'Zoom is not beside Format Painter');
+    assert(first&&control().previousElementSibling===painter,'Zoom is not beside Format Painter');
     assert(!view().contentEl.querySelector('.fortune-zoom-container'),'Footer zoom remains');
     assert(first.value==='130','Saved intermediate zoom is not shown');
     assert([...first.options].map(option=>option.value).join(',')==='50,75,90,100,125,130,150,175,200','Wrong presets');
@@ -53,14 +53,28 @@
     if(background)fx.dispatchEvent(new FocusEvent('blur',{relatedTarget:dropdown()}));
     await choose(125);assert(api().getSheet().data[0][0].f===formula+'+2'&&api().getSheet().data[0][0].v===7,'Keyboard focus lost the formula draft');
     await choose(100);results.push('Keyboard focus into zoom commits the formula draft');
+    const type=async(text,key='Enter')=>{
+      field().focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(field(),text);
+      field().dispatchEvent(new Event('input',{bubbles:true}));await wait(40);
+      if(key==='blur')field().dispatchEvent(new FocusEvent('focusout',{bubbles:true,relatedTarget:dropdown()}));
+      else field().dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
+      await wait(120);
+    };
+    await type('137.5%');assert(api().getSheet().zoomRatio===1.375&&field().value==='137.5%','Custom percentage did not apply exactly');
+    for(const invalid of ['5','401','abc','']){await type(invalid);assert(api().getSheet().zoomRatio===1.375&&field().value==='137.5%','Invalid zoom was accepted');}
+    await type('200','Escape');assert(api().getSheet().zoomRatio===1.375&&field().value==='137.5%','Escape did not cancel');
+    await type('142.5','blur');assert(api().getSheet().zoomRatio===1.425,'Click-away commit failed');
+    await choose(150);assert(field().value==='150%','Preset did not update text');
+    await type('137.5');assert(api().getSheet().zoomRatio===1.375,'Bare typed percentage did not apply');
+    results.push('Typed decimal/bare percentages, click-away commit, invalid input and Escape');
     await view().save();const saved=JSON.parse(await app.vault.read(file));
-    assert(saved.find(sheet=>sheet.id==='first').zoomRatio===1&&saved.find(sheet=>sheet.id==='second').zoomRatio===1.75,'Zoom was not saved');
+    assert(saved.find(sheet=>sheet.id==='first').zoomRatio===1.375&&saved.find(sheet=>sheet.id==='second').zoomRatio===1.75,'Zoom was not saved');
     await leaf.detach();leaf=app.workspace.getLeaf(true);await leaf.openFile(file);app.workspace.setActiveLeaf(leaf,{focus:true});await wait(400);
-    assert(dropdown().value==='100'&&api().getSheet().data[0][0].v===7,'Zoom/formula did not survive reopen');
+    assert(field().value==='137.5%'&&api().getSheet().zoomRatio===1.375&&api().getSheet().data[0][0].v===7,'Zoom/formula did not survive reopen');
     api().activateSheet({id:'second'});await wait(100);assert(dropdown().value==='175','Second sheet zoom lost after reopen');
     results.push('Per-sheet zoom and edited formulas survive save/reopen');
     second=app.workspace.getLeaf('split','vertical');await second.openFile(other);app.workspace.setActiveLeaf(second,{focus:true});await wait(300);
-    const secondDropdown=second.view.contentEl.querySelector('.sheetian-toolbar-zoom');secondDropdown.value='200';secondDropdown.dispatchEvent(new Event('change',{bubbles:true}));await wait(120);
+    const secondDropdown=second.view.contentEl.querySelector('.sheetian-zoom-select');secondDropdown.value='200';secondDropdown.dispatchEvent(new Event('change',{bubbles:true}));await wait(120);
     assert(second.view.workbook.current.getSheet().zoomRatio===2&&api().getSheet().zoomRatio===1.75,'Zoom leaked into another pane');
     assert(secondDropdown.getBoundingClientRect().right<=second.view.contentEl.getBoundingClientRect().right,'Dropdown clipped in split pane');
     results.push('Split-pane zoom is independent and remains visible');

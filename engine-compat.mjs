@@ -96,6 +96,7 @@ export function patchToolbarZoom(source) {
   var workbook = ${hooks}useContext(WorkbookContext);
   return ${react}.createElement(ToolbarZoom, {
     zoom: workbook.context.zoomRatio,
+    sheetId: workbook.context.currentSheetId,
     onZoom: function (value) {
       if (value < ${core}MIN_ZOOM_RATIO || value > ${core}MAX_ZOOM_RATIO) return;
       var editor = workbook.refs.fxInput.current;
