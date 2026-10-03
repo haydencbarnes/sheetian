@@ -3571,3 +3571,27 @@
 .obsidian-spreadsheet-view .sheetian-menu-bar .sheetian-menu-button:hover,
 .obsidian-spreadsheet-view .sheetian-menu-bar .sheetian-menu-button[aria-expanded="true"] { background: var(--background-modifier-hover); }
 .obsidian-spreadsheet-view .sheetian-menu-bar .sheetian-menu-button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: -2px; }
+
+.obsidian-spreadsheet .sheetian-toolbar-zoom {
+  appearance: auto;
+  background-image: none;
+  flex: 0 0 auto;
+  width: 68px;
+  height: 26px;
+  min-height: 0;
+  margin: 0 3px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  box-shadow: none;
+  background-color: transparent;
+  color: #262626;
+  font: 12px Arial, sans-serif;
+  cursor: pointer;
+}
+.obsidian-spreadsheet .sheetian-toolbar-zoom:hover { background-color: #efefef; }
+.obsidian-spreadsheet .sheetian-toolbar-zoom:focus-visible {
+  border-color: #5074d0;
+  outline: 1px solid #5074d0;
+  outline-offset: -1px;
+}

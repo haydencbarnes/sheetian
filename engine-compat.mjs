@@ -74,7 +74,49 @@ $&`);
   return 'import { runMenuAction } from ' + JSON.stringify(new URL("./menu-actions.ts", import.meta.url).pathname) + ';\n' + source;
 }
 
-export function patchEngine(source) { return patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))); }
+// Render the zoom dropdown as an ordinary toolbar item so the engine accounts
+// for its width and includes it in overflow. Use the owning workbook's context
+// and existing no-history zoom update; the sheet keeps its zoom when reopened.
+export function patchToolbarZoom(source) {
+  const toolbar = /var getToolbarItem = (?:React\.)?useCallback\(function \(name, i\) \{/g;
+  const control = /var ZoomControl = function ZoomControl\(\) \{[\s\S]*?\n\};/g;
+  const footer = /\/\*#__PURE__\*\/(React(?:__default\['default'\])?)\.createElement\(ZoomControl, null\)/g;
+  const resize = /\[settings\.toolbarItems, settings\.customToolbarItems\]\);/g;
+  for (const site of [toolbar, control, footer, resize]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's toolbar zoom compatibility patch.");
+  }
+  const react = [...source.matchAll(footer)][0][1];
+  const hooks = react === "React" ? "" : "React.";
+  const core = react === "React" ? "" : "core.";
+  source = source.replace(resize, "[settings.toolbarItems, settings.customToolbarItems, sheetWidth]);");
+  source = source.replace(footer, "null");
+  source = source.replace(toolbar, `$&
+    if (name === "sheetian-zoom") return ${react}.createElement(ZoomControl, { key: name });`);
+  source = source.replace(control, `var ZoomControl = function ZoomControl() {
+  var workbook = ${hooks}useContext(WorkbookContext);
+  return ${react}.createElement(ToolbarZoom, {
+    zoom: workbook.context.zoomRatio,
+    onZoom: function (value) {
+      if (value < ${core}MIN_ZOOM_RATIO || value > ${core}MAX_ZOOM_RATIO) return;
+      var editor = workbook.refs.fxInput.current;
+      if (editor && editor.ownerDocument.activeElement === editor) {
+        workbook.setContext(function (ctx) {
+          runMenuAction(ctx, "commit-formula", workbook.refs.cellInput.current, { editor: editor });
+        });
+      }
+      workbook.setContext(function (ctx) {
+        var index = ${core}getSheetIndex(ctx, ctx.currentSheetId);
+        if (index == null) return;
+        ctx.luckysheetfile[index].zoomRatio = value;
+        ctx.zoomRatio = value;
+      }, { noHistory: true });
+    }
+  });
+};`);
+  return 'import { ToolbarZoom } from ' + JSON.stringify(new URL("./toolbar-zoom.tsx", import.meta.url).pathname) + ';\n' + source;
+}
+
+export function patchEngine(source) { return patchToolbarZoom(patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.

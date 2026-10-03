@@ -105,6 +105,16 @@ export class SpreadsheetView extends TextFileView {
     container.dataset.theme = settings.theme;
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
+    // Native selects move focus before changing their value. Commit a draft
+    // before mouse or keyboard focus reaches zoom, just as the menus do.
+    container.addEventListener("mousedown", event => {
+      if (generation === this.generation && (event.target as HTMLElement)?.closest(".sheetian-toolbar-zoom")) this.prepareMenu();
+    }, true);
+    container.addEventListener("blur", event => {
+      if (generation === this.generation && (event.relatedTarget as HTMLElement | null)?.matches?.(".sheetian-toolbar-zoom")) {
+        this.prepareMenu(event.target as HTMLElement);
+      }
+    }, true);
     container.addEventListener("keydown", event => {
       const editor = (event.target as HTMLElement)?.closest<HTMLDivElement>(".fortune-fx-input");
       if (event.key !== "Enter" || !editor || !container.contains(editor) || generation !== this.generation || !this.workbook.current) return;
@@ -147,7 +157,8 @@ export class SpreadsheetView extends TextFileView {
     this.root = createRoot(container);
     this.root.render(<Workbook
       ref={this.workbook} data={this.sheets} lang="en" currency={settings.currency}
-      toolbarItems={defaultSettings.toolbarItems.filter(item => item !== "clear-format")}
+      toolbarItems={defaultSettings.toolbarItems.filter(item => item !== "clear-format")
+        .flatMap(item => item === "format-painter" ? [item, "sheetian-zoom"] : [item])}
       onChange={(sheets: Sheet[]) => {
         if (generation !== this.generation) return;
         this.sheets = sheets;
@@ -188,12 +199,12 @@ export class SpreadsheetView extends TextFileView {
     this.resizeObserver.observe(container);
   }
 
-  private prepareMenu(): void {
+  private prepareMenu(draft?: HTMLElement): void {
     // Commit an active draft before opening a command menu, then restore the
     // selection so formatting/insertion applies to the same cells.
     const selection = this.workbook.current?.getSelection();
     const input = this.contentEl.querySelector<HTMLElement>(".fortune-fx-input");
-    if (input && this.contentEl.ownerDocument.activeElement === input) {
+    if (input && (this.contentEl.ownerDocument.activeElement === input || draft === input)) {
       const workbook = this.workbook.current as (WorkbookInstance & { runMenuAction: (action: string, payload?: MenuPayload) => void }) | null;
       // Commit through the same engine update as Enter, without moving to the
       // next row or triggering a second commit from the mirrored grid editor.

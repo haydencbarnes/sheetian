@@ -8,7 +8,7 @@ Sheetian repairs data-loss and save lifecycle defects, preserves images, filters
 
 1. Click the table ribbon icon or run **Sheetian: New spreadsheet**.
 2. Right-click a folder or file to create a spreadsheet in that folder.
-3. Use the **File, Edit, View, Insert, Format, Data, Tools, and Help** menus above the formatting toolbar for import/export, editing, layout, sorting/filtering, and help. Edit cells, use formulas, format cells, and insert images with the spreadsheet toolbar. Drag the formula bar's bottom edge to make it taller or shorter, or click its right-hand chevron to expand/collapse. The resize grip supports arrow keys and Home/End.
+3. Use the **File, Edit, View, Insert, Format, Data, Tools, and Help** menus above the formatting toolbar for import/export, editing, layout, sorting/filtering, and help. Edit cells, use formulas, format cells, and insert images with the spreadsheet toolbar. The zoom dropdown beside Format Painter offers 50%, 75%, 90%, 100%, 125%, 150%, 175%, and 200%; each sheet remembers its zoom. Drag the formula bar's bottom edge to make it taller or shorter, or click its right-hand chevron to expand/collapse. The resize grip supports arrow keys and Home/End.
 4. Run **Sheetian: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
 
 In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.

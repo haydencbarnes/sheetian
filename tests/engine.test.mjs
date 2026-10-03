@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { patchEngine, patchDelayedFocus, patchPasteOwnership } from "../engine-compat.mjs";
+import { patchEngine, patchDelayedFocus, patchPasteOwnership, patchToolbarZoom } from "../engine-compat.mjs";
 
 test("delayed focus is safe after the workbook unmounts", () => {
   let callback, calls = 0;
@@ -33,9 +33,14 @@ test("the compatibility patch still matches the pinned engine's two distribution
     assert.match(patched, /runMenuAction: function \(action, payload\)/);
     assert.match(patched, /context.devicePixelRatio, context.calculatebarHeight/);
     assert.match(patched, /createElement\(FormulaBarControls/);
+    assert.match(patched, /name === "sheetian-zoom"/);
+    assert.match(patched, /createElement\(ToolbarZoom/);
+    assert.match(patched, /settings\.customToolbarItems, sheetWidth/);
+    assert.doesNotMatch(patched, /createElement\(ZoomControl, null\)/);
     assert.match(patched, /"data-sheetian-column": allowEditRef.current \? hoverLocation.col_index : undefined/);
     assert.match(patched, /"data-sheetian-row": hoverLocation.row_index >= 0 && (?:core\.)?isAllowEdit\(context\)/);
     assert.ok(patched.includes(`&& ${file === "index.js" ? "core." : ""}isAllowEdit(context)`));
   }
   assert.throws(() => patchEngine("unexpected future engine"));
+  assert.throws(() => patchToolbarZoom("unexpected future engine"));
 });
