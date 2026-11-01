@@ -1,10 +1,11 @@
 import {
   type Context, getSheetIndex, isAllowEdit, toolbarItemClickHandler,
   handleSort, handleFreeze, createFilter, clearFilter, selectAll,
-  deleteSelectedCellText, handleCopy, handlePaste, selectionCache, updateCell, moveHighlightCell,
+  deleteSelectedCellText, updateCell, moveHighlightCell, selectionCache,
 } from "@fortune-sheet/core";
+import { copyCells, pasteCells, readDesktopClipboard, type ClipboardContents, type PasteMode } from "./clipboard";
 
-export interface MenuPayload { clipboard?: ClipboardEvent; zoom?: number; editor?: HTMLDivElement; moveDown?: boolean; writeClipboard?: (html: string) => void; }
+export interface MenuPayload { clipboard?: ClipboardEvent; contents?: ClipboardContents; mode?: PasteMode; zoom?: number; editor?: HTMLDivElement; moveDown?: boolean; writeClipboard?: (html: string) => void; }
 
 // Runs through FortuneSheet's normal context update/history mechanism. Every
 // action uses the invoking workbook's context, including in split panes.
@@ -23,13 +24,9 @@ export function runMenuAction(ctx: Context, action: string, input: HTMLDivElemen
     ctx.showSearch = true; ctx.showReplace = action === "replace"; return;
   }
   if (action === "select-all") { selectAll(ctx); return; }
-  if (action === "copy" || action === "cut") {
-    if (action === "cut" && !isAllowEdit(ctx, ctx.luckysheet_select_save)) return;
-    let copied = false;
-    const writer = payload?.writeClipboard;
-    (handleCopy as (ctx: Context, writer?: (html: string) => void) => void)(ctx, writer ? html => { writer(html); copied = true; } : undefined);
-    // A refused partial-merge/disjoint copy must not cut a previous range.
-    if (action === "cut") ctx.luckysheet_paste_iscut = copied;
+  if (action === "copy" || action === "cut" || action === "copy-values" || action === "copy-formulas") {
+    const mode = action === "copy-values" ? "values" : action === "copy-formulas" ? "formulas" : payload?.mode;
+    copyCells(ctx, mode, action === "cut", payload?.writeClipboard ? contents => payload.writeClipboard!(contents.html) : undefined);
     return;
   }
   const sheet = ctx.luckysheetfile[getSheetIndex(ctx, ctx.currentSheetId)!];
@@ -40,8 +37,12 @@ export function runMenuAction(ctx: Context, action: string, input: HTMLDivElemen
   }
   if (!isAllowEdit(ctx, ctx.luckysheet_select_save)) return;
   if (action === "clear-contents") { deleteSelectedCellText(ctx); return; }
-  if (action === "paste" && payload?.clipboard) {
-    selectionCache.isPasteAction = true; handlePaste(ctx, payload.clipboard); return;
+  if (["paste", "paste-values", "paste-formulas", "paste-formatting"].includes(action)) {
+    selectionCache.isPasteAction = false;
+    const data = payload?.clipboard?.clipboardData;
+    const contents = payload?.contents ?? (data ? { html: data.getData("text/html"), text: data.getData("text/plain") } : readDesktopClipboard());
+    const mode = action === "paste-values" ? "values" : action === "paste-formulas" ? "formulas" : action === "paste-formatting" ? "formatting" : payload?.mode;
+    pasteCells(ctx, contents, mode, input?.ownerDocument); return;
   }
   if (action === "sort-asc" || action === "sort-desc") { handleSort(ctx, action === "sort-asc"); return; }
   if (action === "filter") { createFilter(ctx); return; }

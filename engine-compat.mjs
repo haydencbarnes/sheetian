@@ -117,7 +117,27 @@ export function patchToolbarZoom(source) {
   return 'import { ToolbarZoom } from ' + JSON.stringify(new URL("./toolbar-zoom.tsx", import.meta.url).pathname) + ';\n' + source;
 }
 
-export function patchEngine(source) { return patchToolbarZoom(patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))))); }
+export function patchClipboardMenu(source) {
+  const start = /var getMenuElement = (?:React\.)?useCallback\(function \(name, i\) \{\n    var _context\$luckysheet_s;/g;
+  if (source.match(start)?.length !== 1) throw new Error("Recheck FortuneSheet's clipboard context menu patch.");
+  const react = source.includes("var containerRef = React.useRef(null);") ? "React__default['default']" : "React";
+  return source.replace(start, `$&
+    var clipboardTitles = {
+      "sheetian-cut": "Cut", "sheetian-copy": "Copy", "sheetian-copy-values": "Copy values only", "sheetian-copy-formulas": "Copy formulas only",
+      "sheetian-paste": "Paste", "sheetian-paste-values": "Paste values only", "sheetian-paste-formulas": "Paste formulas only", "sheetian-paste-formatting": "Paste formatting only"
+    };
+    if (clipboardTitles[name]) return ${react}.createElement(Menu, {
+      key: name,
+      onClick: function () {
+        setContext(function (draftCtx) {
+          runMenuAction(draftCtx, name.slice(9), refs.cellInput.current);
+          draftCtx.contextMenu = {};
+        });
+      }
+    }, clipboardTitles[name]);`);
+}
+
+export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
@@ -215,4 +235,29 @@ export function patchCopyWriter(source) {
   return source;
 }
 
-export function patchCore(source) { return patchCopyWriter(patchTextFormula(patchFormulaEditing(patchWheelScroll(source)))); }
+// Bypass the browser's hidden-copy editor when moving a desktop clipboard cut.
+// The existing engine move operation retains formulas and clears the source.
+export function patchCutPaste(source) {
+  const entry = /function handlePasteByClick\(ctx, clipboardData, triggerType\) \{/g;
+  if (source.match(entry)?.length !== 1) throw new Error("Recheck FortuneSheet's desktop cut/paste compatibility patch.");
+  return source.replace(entry, `$&
+  if (triggerType === "sheetian-cut") {
+    pasteHandlerOfCutPaste(ctx, ctx.luckysheet_copy_save);
+    ctx.luckysheet_paste_iscut = false;
+    ctx.luckysheet_selection_range = [];
+    return;
+  }`);
+}
+
+// Newly pasted formulas must calculate even when their inputs lie outside the
+// pasted range. Include those roots in the engine's normal dependency ordering
+// without recalculating unrelated formulas or discarding their cached results.
+export function patchPasteFormulaCalculation(source) {
+  const force = /    if \(isForce\) \{\n      updateValueArray\.push\(formulaObject\);\n    \}/g;
+  if (source.match(force)?.length !== 1) throw new Error("Recheck FortuneSheet's pasted formula calculation patch.");
+  return source.replace(force, `    if (isForce || ctx.sheetianPasteFormulaKeys?.includes(key)) {
+      updateValueArray.push(formulaObject);
+    }`);
+}
+
+export function patchCore(source) { return patchPasteFormulaCalculation(patchCutPaste(patchCopyWriter(patchTextFormula(patchFormulaEditing(patchWheelScroll(source)))))); }

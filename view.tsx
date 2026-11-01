@@ -61,6 +61,11 @@ export class SpreadsheetView extends TextFileView {
       api.setCellFormatByRange("bl", cell?.bl === 1 ? 0 : 1, range);
       return false;
     });
+    this.scope.register(["Mod", "Shift"], "v", () => {
+      if (this.isEditingText()) return;
+      this.clipboardAction("paste-values");
+      return false;
+    });
   }
   getViewType(): string { return VIEW_TYPE_SPREADSHEET; }
   getIcon(): string { return "table"; }
@@ -105,6 +110,20 @@ export class SpreadsheetView extends TextFileView {
     container.dataset.theme = settings.theme;
     const generation = this.generation;
     const ownerWindow = container.ownerDocument.defaultView!;
+    // Text selections in cell/formula/search editors keep normal text editing.
+    container.addEventListener("keydown", event => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || this.isEditingText()) return;
+      const key = event.key.toLowerCase();
+      const action = key === "c" && !event.shiftKey ? "copy" : key === "x" && !event.shiftKey ? "cut" : key === "v" && event.shiftKey ? "paste-values" : null;
+      if (!action) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      this.clipboardAction(action);
+    }, true);
+    for (const type of ["copy", "cut", "paste"] as const) container.addEventListener(type, event => {
+      if (generation !== this.generation || this.isEditingText()) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      this.clipboardAction(type, type === "paste" ? { clipboard: event } : undefined);
+    }, true);
     // Zoom controls move focus before changing their value. Commit a draft
     // before mouse or keyboard focus reaches zoom, just as the menus do.
     container.addEventListener("mousedown", event => {
@@ -159,6 +178,8 @@ export class SpreadsheetView extends TextFileView {
     this.root = createRoot(container);
     this.root.render(<Workbook
       ref={this.workbook} data={this.sheets} lang="en" currency={settings.currency}
+      cellContextMenu={this.clipboardContextMenu(defaultSettings.cellContextMenu)}
+      headerContextMenu={this.clipboardContextMenu(defaultSettings.headerContextMenu)}
       toolbarItems={defaultSettings.toolbarItems.filter(item => item !== "clear-format")
         .flatMap(item => item === "format-painter" ? [item, "sheetian-zoom"] : [item])}
       onChange={(sheets: Sheet[]) => {
@@ -201,6 +222,27 @@ export class SpreadsheetView extends TextFileView {
     this.resizeObserver.observe(container);
   }
 
+  private isEditingText(): boolean {
+    const active = this.contentEl.ownerDocument.activeElement as HTMLElement | null;
+    if (!active || !this.contentEl.contains(active)) return false;
+    if (active.matches("input, textarea, .fortune-fx-input")) return true;
+    if (active.closest(".luckysheet-cell-input")) {
+      const box = active.closest(".luckysheet-input-box");
+      return !!box && Number(active.ownerDocument.defaultView!.getComputedStyle(box).zIndex) >= 0;
+    }
+    return active.isContentEditable && !active.matches(".fortune-sheet-overlay");
+  }
+
+  private clipboardAction(action: string, payload?: MenuPayload): void {
+    const api = this.workbook.current as (WorkbookInstance & { runMenuAction: (action: string, payload?: MenuPayload) => void }) | null;
+    api?.runMenuAction(action, payload);
+  }
+
+  private clipboardContextMenu(items: string[]): string[] {
+    return items.flatMap(item => item === "copy" ? ["sheetian-cut", "sheetian-copy", "sheetian-copy-values", "sheetian-copy-formulas"] :
+      item === "paste" ? ["sheetian-paste", "sheetian-paste-values", "sheetian-paste-formulas", "sheetian-paste-formatting"] : [item]);
+  }
+
   private prepareMenu(draft?: HTMLElement): void {
     // Commit an active draft before opening a command menu, then restore the
     // selection so formatting/insertion applies to the same cells.
@@ -229,11 +271,6 @@ export class SpreadsheetView extends TextFileView {
       workbook?.runMenuAction(action, payload);
     };
     const action = (title: string, name: string, checked?: boolean) => item(title, () => command(name), !selected, checked);
-    const copy = (title: string, name: "copy" | "cut") => item(title, () => command(name, { writeClipboard: html => {
-      const table = this.contentEl.ownerDocument.createElement("div"); table.innerHTML = html;
-      const text = Array.from(table.querySelectorAll("tr"), row => Array.from(row.querySelectorAll("td, th"), cell => cell.textContent ?? "").join("\t")).join("\n");
-      require("electron").clipboard.write({ html, text });
-    } }), !selected);
     const format = (title: string, attr: "ht" | "vt" | "tb", value: number | string) => item(title,
       () => { const workbook = this.workbook.current; const ranges = workbook?.getSelection(); if (ranges?.length) workbook!.setCellFormatByRange(attr, value, ranges); }, !selected);
     const insert = (title: string, type: "row" | "column", direction: "lefttop" | "rightbottom") => item(title, () => {
@@ -253,12 +290,8 @@ export class SpreadsheetView extends TextFileView {
       { title: "Edit", items: [
         item("Undo", () => this.workbook.current?.handleUndo(), !api),
         item("Redo", () => this.workbook.current?.handleRedo(), !api), null,
-        copy("Cut", "cut"), copy("Copy", "copy"), item("Paste", () => {
-          const clipboard = require("electron").clipboard;
-          const document = this.contentEl.ownerDocument, win = document.defaultView!;
-          const data = new win.DataTransfer(); data.setData("text/html", clipboard.readHTML()); data.setData("text/plain", clipboard.readText());
-          command("paste", { clipboard: new win.ClipboardEvent("paste", { clipboardData: data }) });
-        }, !selected), null,
+        action("Cut", "cut"), action("Copy", "copy"), action("Copy values only", "copy-values"), action("Copy formulas only", "copy-formulas"), null,
+        action("Paste", "paste"), action("Paste values only", "paste-values"), action("Paste formulas only", "paste-formulas"), action("Paste formatting only", "paste-formatting"), null,
         action("Select all", "select-all"), action("Clear contents", "clear-contents"), null,
         action("Find", "find"), action("Find and replace", "replace"),
       ] },
