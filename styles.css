@@ -3466,6 +3466,38 @@
 .obsidian-spreadsheet .fortune-context-menu {
   margin: 0;
 }
+/* Reserve scrollbar tracks outside the cells so resizing cannot paint a
+   native scrollbar over the last row or column. */
+.obsidian-spreadsheet .fortune-sheet-container {
+  --sheetian-scrollbar-size: 12px;
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 var(--sheetian-scrollbar-size) var(--sheetian-scrollbar-size) 0;
+  background: #fafafc;
+}
+.obsidian-spreadsheet .fortune-sheet-canvas,
+.obsidian-spreadsheet .fortune-sheet-overlay {
+  top: 0;
+  left: 0;
+}
+.obsidian-spreadsheet .luckysheet-scrollbar-ltr {
+  /* Obsidian's inherited scrollbar-color overrides WebKit scrollbar sizing. */
+  scrollbar-color: auto;
+  scrollbar-width: auto;
+  background: #fafafc;
+}
+.obsidian-spreadsheet .luckysheet-scrollbar-x {
+  bottom: 0;
+  height: var(--sheetian-scrollbar-size);
+}
+.obsidian-spreadsheet .luckysheet-scrollbar-y {
+  right: 0;
+  width: var(--sheetian-scrollbar-size);
+}
+.obsidian-spreadsheet .luckysheet-scrollbar-x > div { max-height: 0; }
+.obsidian-spreadsheet .luckysheet-scrollbar-y > div { max-width: 0; }
 .obsidian-spreadsheet[data-theme="dark"] > .fortune-container,
 .theme-dark .obsidian-spreadsheet[data-theme="auto"] > .fortune-container {
   filter: invert(1) hue-rotate(180deg);

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { flushSync } from "react-dom";
 
 const MIN_HEIGHT = 29;
 const EXPANDED_HEIGHT = 160;
@@ -13,6 +14,8 @@ export function FormulaBarControls({ height, onResize, workbookRef }: Props): JS
   const [maximum, setMaximum] = React.useState(420);
   const drag = React.useRef<{ y: number; height: number; pointer: number } | null>(null);
   const expanded = React.useRef(EXPANDED_HEIGHT);
+  const frame = React.useRef<number | null>(null);
+  const pending = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     const book = workbookRef.current;
     if (!book) return;
@@ -25,7 +28,28 @@ export function FormulaBarControls({ height, onResize, workbookRef }: Props): JS
   React.useLayoutEffect(() => {
     if (height > maximum) onResize(maximum);
   }, [height, maximum, onResize]);
-  const resize = (value: number) => onResize(Math.max(MIN_HEIGHT, Math.min(maximum, Math.round(value))));
+  const resize = (value: number) => {
+    const next = Math.max(MIN_HEIGHT, Math.min(maximum, Math.round(value)));
+    // A canvas size change clears its bitmap. Commit the matching grid redraw
+    // within this frame instead of letting React defer it past browser paint.
+    if (next !== height) flushSync(() => onResize(next));
+  };
+  const resizeRef = React.useRef(resize);
+  React.useLayoutEffect(() => { resizeRef.current = resize; });
+  const flush = () => {
+    const ownerWindow = workbookRef.current?.ownerDocument.defaultView;
+    if (frame.current !== null) ownerWindow?.cancelAnimationFrame(frame.current);
+    frame.current = null;
+    const next = pending.current;
+    pending.current = null;
+    if (next !== null) resizeRef.current(next);
+  };
+  React.useLayoutEffect(() => {
+    const ownerWindow = workbookRef.current?.ownerDocument.defaultView;
+    return () => {
+      if (frame.current !== null) ownerWindow?.cancelAnimationFrame(frame.current);
+    };
+  }, [workbookRef]);
   const toggle = () => {
     if (height > MIN_HEIGHT) { expanded.current = height; resize(MIN_HEIGHT); }
     else resize(expanded.current);
@@ -33,6 +57,7 @@ export function FormulaBarControls({ height, onResize, workbookRef }: Props): JS
   const stop = (event: React.SyntheticEvent) => { event.preventDefault(); event.stopPropagation(); };
   const finish = (event: React.PointerEvent<HTMLDivElement>) => {
     if (drag.current?.pointer !== event.pointerId) return;
+    flush();
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     event.stopPropagation();
@@ -58,9 +83,12 @@ export function FormulaBarControls({ height, onResize, workbookRef }: Props): JS
       onPointerMove={event => {
         const start = drag.current;
         if (!start || start.pointer !== event.pointerId) return;
-        stop(event); resize(start.height + event.clientY - start.y);
+        stop(event);
+        pending.current = start.height + event.clientY - start.y;
+        const ownerWindow = event.currentTarget.ownerDocument.defaultView!;
+        if (frame.current === null) frame.current = ownerWindow.requestAnimationFrame(flush);
       }}
-      onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={() => { drag.current = null; }}
+      onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}
       onKeyDown={event => {
         event.stopPropagation();
         if (!["ArrowUp", "ArrowDown", "Home", "End", "Enter", " "].includes(event.key)) return;

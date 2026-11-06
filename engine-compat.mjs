@@ -35,19 +35,47 @@ export function patchRowResizeTarget(source) {
 export function patchFormulaBar(source) {
   const editor = /className: "fortune-fx-editor"/g;
   const children = /\}, \/\*#__PURE__\*\/(React(?:__default\['default'\])?)\.createElement\(LocationBox, null\)/g;
-  const canvas = /context\.rowHeaderWidth, context\.columnHeaderHeight, context\.devicePixelRatio\]\);/g;
-  for (const site of [editor, children, canvas]) {
+  const canvas = /(?:React\.)?useEffect\(function \(\) \{\n    setContext\(function \(draftCtx\) \{\n      return (?:core\.)?updateContextWithCanvas\(draftCtx, refs.canvas.current, placeholderRef.current\);\n    \}\);\n  \}, \[refs.canvas, setContext, context.rowHeaderWidth, context.columnHeaderHeight, context.devicePixelRatio\]\);/g;
+  const paint = /(?:React\.)?useEffect\(function \(\) \{\n    var _refs\$globalCache\$fre, _freeze\$horizontal, _freeze\$vertical;/g;
+  const freeze = /(?:React\.)?useEffect\(function \(\) \{\n    (?:core\.)?initFreeze\(context, refs.globalCache, context.currentSheetId\);/g;
+  for (const site of [editor, children, canvas, paint, freeze]) {
     if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's resizable formula bar compatibility patch.");
   }
+  const effect = source.includes("var placeholderRef = React.useRef(null);") ? "React.useEffect" : "useEffect";
+  const layoutEffect = effect.replace("useEffect", "useLayoutEffect");
+  const updateCanvas = effect.startsWith("React.") ? "core.updateContextWithCanvas" : "updateContextWithCanvas";
+  // Canvas resizing erases its pixels. Rebuild frozen-pane geometry and draw
+  // during the commit, before the browser can expose an incomplete frame.
+  source = source.replace(freeze, match => match.replace("useEffect", "useLayoutEffect"));
+  source = source.replace(paint, match => match.replace("useEffect", "useLayoutEffect") + `
+    // A height commit runs before its geometry commit. Draw only the context
+    // that matches the committed viewport; both commits finish before paint.
+    if (context.luckysheetTableContentHW[0] !== placeholderRef.current.clientWidth ||
+        context.luckysheetTableContentHW[1] !== placeholderRef.current.clientHeight) return;`);
   source = source.replace(editor, '$&, style: { height: context.calculatebarHeight }');
   source = source.replace(children, (_match, react) => `}, ${react}.createElement(FormulaBarControls, {
     height: context.calculatebarHeight,
     workbookRef: refs.workbookContainer,
-    onResize: function (height) { setContext(function (ctx) { ctx.calculatebarHeight = height; }); }
+    onResize: function (height) {
+      setContext(function (ctx) {
+        ctx.calculatebarHeight = height;
+      }, { noHistory: true });
+    }
   }), ${react}.createElement(LocationBox, null)`);
-  const effect = source.includes("var placeholderRef = React.useRef(null);") ? "React.useEffect" : "useEffect";
-  const updateCanvas = effect.startsWith("React.") ? "core.updateContextWithCanvas" : "updateContextWithCanvas";
-  source = source.replace(canvas, `context.rowHeaderWidth, context.columnHeaderHeight, context.devicePixelRatio, context.calculatebarHeight]);
+  source = source.replace(canvas, `${layoutEffect}(function () {
+    var placeholder = placeholderRef.current;
+    var canvas = refs.canvas.current;
+    if (!placeholder || !canvas) return;
+    var width = placeholder.clientWidth, height = placeholder.clientHeight;
+    // Geometry can itself change flex layout. Recheck after every commit,
+    // stopping as soon as the bitmap, overlay and viewport agree.
+    if (context.luckysheetTableContentHW[0] === width && context.luckysheetTableContentHW[1] === height &&
+        context.cellmainWidth === width - context.rowHeaderWidth && context.cellmainHeight === height - context.columnHeaderHeight &&
+        canvas.width === Math.ceil(width * context.devicePixelRatio) && canvas.height === Math.ceil(height * context.devicePixelRatio)) return;
+    setContext(function (ctx) {
+      ${updateCanvas}(ctx, canvas, placeholder);
+    }, { noHistory: true });
+  });
   ${effect}(function () {
     var placeholder = placeholderRef.current;
     if (!placeholder) return;
@@ -56,12 +84,33 @@ export function patchFormulaBar(source) {
       setContext(function (ctx) {
         if (ctx.luckysheetTableContentHW[0] === placeholder.clientWidth && ctx.luckysheetTableContentHW[1] === placeholder.clientHeight) return;
         ${updateCanvas}(ctx, refs.canvas.current, placeholder);
-      });
+      }, { noHistory: true });
     });
     observer.observe(placeholder);
     return function () { observer.disconnect(); };
   }, [refs.canvas, setContext, context.currentSheetId, context.devicePixelRatio]);`);
   return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
+}
+
+// Scrollbars must use the flex-sized sheet frame as their containing block.
+// The overlay's context-driven height briefly lags while the bar is resized.
+export function patchScrollbarLayout(source) {
+  const scrollbars = /, \/\*#__PURE__\*\/(React(?:__default\['default'\])?)\.createElement\(ScrollBar, \{\n    axis: "x"\n  \}\), \/\*#__PURE__\*\/\1\.createElement\(ScrollBar, \{\n    axis: "y"\n  \}\)/g;
+  const overlay = /\/\*#__PURE__\*\/(React(?:__default\['default'\])?)\.createElement\(SheetOverlay, null\)/g;
+  const geometry = /style: axis === "x" \? \{\n      left: context.rowHeaderWidth,\n      width: "calc\(100% - "\.concat\(context.rowHeaderWidth, "px\)"\)\n    \} : \{\n      height: "100%"\n    \},/g;
+  for (const site of [scrollbars, overlay, geometry]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's scrollbar layout compatibility patch.");
+  }
+  source = source.replace(scrollbars, "");
+  source = source.replace(overlay, (_match, react) => `${react}.createElement(SheetOverlay, null),
+    ${react}.createElement(ScrollBar, { axis: "x" }),
+    ${react}.createElement(ScrollBar, { axis: "y" })`);
+  return source.replace(geometry, `style: axis === "x" ? {
+      left: context.rowHeaderWidth,
+      right: "var(--sheetian-scrollbar-size)"
+    } : {
+      bottom: "var(--sheetian-scrollbar-size)"
+    },`);
 }
 
 export function patchMenuActions(source) {
@@ -137,7 +186,7 @@ export function patchClipboardMenu(source) {
     }, clipboardTitles[name]);`);
 }
 
-export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))))); }
+export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchScrollbarLayout(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
