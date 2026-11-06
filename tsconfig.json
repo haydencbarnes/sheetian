@@ -9,7 +9,6 @@
     "allowJs": false,
     "noImplicitAny": true,
     "moduleResolution": "node",
-    "importHelpers": true,
     "isolatedModules": true,
     "strictNullChecks": true,
     "lib": [
