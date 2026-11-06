@@ -5,6 +5,7 @@
   const prior = app.workspace.activeLeaf, root = `Sheetian scroll checks ${Date.now()}`;
   await app.vault.createFolder(root);
   const files=[], results=[];
+  try {
   for(const zoom of [1,1.3]) {
     const raw=JSON.stringify([{name:'Scroll',id:`scroll-${zoom}`,row:200,column:26,zoomRatio:zoom,
       celldata:[{r:0,c:0,v:{v:'Top'}},{r:150,c:0,v:{v:'Bottom'}}]}]);
@@ -14,6 +15,9 @@
     const bar=view.contentEl.querySelector('.luckysheet-scrollbar-y');
     const wheel=async(deltaY,deltaX=0)=>{
       area.dispatchEvent(new WheelEvent('wheel',{deltaY,deltaX,bubbles:true,cancelable:true}));await delay(25);
+      // Native scroll events and React's grid update may land on separate
+      // frames in the desktop app. Wait for both before comparing offsets.
+      for(let n=0;n<25&&Math.abs(area.scrollTop-bar.scrollTop)>=1/window.devicePixelRatio;n++)await delay(10);
     };
     for(let i=0;i<12;i++)await wheel(100);
     assert(bar.scrollTop>0,'Downward scrolling failed');
@@ -51,9 +55,12 @@
   area.dispatchEvent(new WheelEvent('wheel',{deltaX:-100,deltaY:0,bubbles:true,cancelable:true}));await delay(80);
   assert(horizontal.scrollLeft===0,'Could not scroll left again');
   results.push('Horizontal wheel scrolling still works in both directions');
-  await leaf.detach();await delay(100);
-  if(prior)app.workspace.setActiveLeaf(prior,{focus:true});
-  for(const f of files)await app.vault.trash(f,true);
-  await app.vault.trash(app.vault.getAbstractFileByPath(root),true);
   return JSON.stringify({passed:results.length,results});
+  } finally {
+    for(const leaf of app.workspace.getLeavesOfType('spreadsheet-view'))if(leaf.view.file?.parent?.path===root)await leaf.detach();
+    await delay(100);
+    if(prior)app.workspace.setActiveLeaf(prior,{focus:true});
+    for(const file of files)if(app.vault.getAbstractFileByPath(file.path))await app.vault.trash(file,true);
+    const folder=app.vault.getAbstractFileByPath(root);if(folder)await app.vault.trash(folder,true);
+  }
 })()
