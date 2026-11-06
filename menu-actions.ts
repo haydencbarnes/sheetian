@@ -3,9 +3,9 @@ import {
   handleSort, handleFreeze, createFilter, clearFilter, selectAll,
   deleteSelectedCellText, updateCell, moveHighlightCell, selectionCache,
 } from "@fortune-sheet/core";
-import { copyCells, pasteCells, readDesktopClipboard, type ClipboardContents, type PasteMode } from "./clipboard";
+import { copyCells, pasteCells, readDesktopClipboard } from "./clipboard";
 
-export interface MenuPayload { clipboard?: ClipboardEvent; contents?: ClipboardContents; mode?: PasteMode; zoom?: number; editor?: HTMLDivElement; moveDown?: boolean; writeClipboard?: (html: string) => void; }
+export interface MenuPayload { clipboard?: ClipboardEvent; zoom?: number; editor?: HTMLDivElement; moveDown?: boolean; writeClipboard?: (html: string) => void; }
 
 // Runs through FortuneSheet's normal context update/history mechanism. Every
 // action uses the invoking workbook's context, including in split panes.
@@ -25,7 +25,7 @@ export function runMenuAction(ctx: Context, action: string, input: HTMLDivElemen
   }
   if (action === "select-all") { selectAll(ctx); return; }
   if (action === "copy" || action === "cut" || action === "copy-values" || action === "copy-formulas") {
-    const mode = action === "copy-values" ? "values" : action === "copy-formulas" ? "formulas" : payload?.mode;
+    const mode = action === "copy-values" ? "values" : action === "copy-formulas" ? "formulas" : "all";
     copyCells(ctx, mode, action === "cut", payload?.writeClipboard ? contents => payload.writeClipboard!(contents.html) : undefined);
     return;
   }
@@ -40,8 +40,8 @@ export function runMenuAction(ctx: Context, action: string, input: HTMLDivElemen
   if (["paste", "paste-values", "paste-formulas", "paste-formatting"].includes(action)) {
     selectionCache.isPasteAction = false;
     const data = payload?.clipboard?.clipboardData;
-    const contents = payload?.contents ?? (data ? { html: data.getData("text/html"), text: data.getData("text/plain") } : readDesktopClipboard());
-    const mode = action === "paste-values" ? "values" : action === "paste-formulas" ? "formulas" : action === "paste-formatting" ? "formatting" : payload?.mode;
+    const contents = data ? { html: data.getData("text/html"), text: data.getData("text/plain") } : readDesktopClipboard();
+    const mode = action === "paste-values" ? "values" : action === "paste-formulas" ? "formulas" : action === "paste-formatting" ? "formatting" : "all";
     pasteCells(ctx, contents, mode, input?.ownerDocument); return;
   }
   if (action === "sort-asc" || action === "sort-desc") { handleSort(ctx, action === "sort-asc"); return; }
