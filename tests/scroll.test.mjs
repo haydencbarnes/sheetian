@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import lodash from "lodash";
-import { patchWheelScroll } from "../engine-compat.mjs";
+import { patchWheelScroll, patchScrollSynchronization } from "../engine-compat.mjs";
 
 async function wheel(file = "index.esm.js") {
   const source = patchWheelScroll(await readFile(`node_modules/@fortune-sheet/core/dist/${file}`, "utf8"));
@@ -59,4 +59,55 @@ test("upward scrolling works from an arbitrary bottom clamp with hidden and diff
 test("the scroll patch matches both pinned engine distributions and rejects source changes", async () => {
   assert.equal(typeof await wheel("index.js"), "function");
   assert.throws(() => patchWheelScroll("future engine"));
+});
+
+test("scrollbar drags commit their captured position synchronously without adding undo history", async () => {
+  for (const file of ["index.js", "index.esm.js"]) {
+    const patched = patchScrollSynchronization(await readFile(`node_modules/@fortune-sheet/react/dist/${file}`, "utf8"));
+    const component = patched.slice(patched.indexOf("var ScrollBar = function ScrollBar("), patched.indexOf("var Dialog = function Dialog("));
+    for (const axis of ["x", "y"]) {
+      const property = axis === "x" ? "scrollLeft" : "scrollTop";
+      const context = { scrollLeft: 0, scrollTop: 0 };
+      const bar = { scrollLeft: 0, scrollTop: 0 }, effects = [];
+      let flushing = false, commits = 0;
+      const react = {
+        createElement: (type, props) => ({ type, props }),
+        useContext: () => ({ context, refs: { scrollbarX: { current: bar }, scrollbarY: { current: bar } },
+          setContext(recipe, options) {
+            assert(flushing, "a continuous scroll event must commit before it returns");
+            assert.equal(options.noHistory, true);
+            recipe(context); commits++;
+          } }),
+        useLayoutEffect: callback => effects.push(callback),
+        useEffect: () => assert.fail("scroll offsets must not be written after paint"),
+      };
+      const render = vm.runInNewContext(component + "; ScrollBar;", {
+        ...react, React: react, React__default: { default: react }, WorkbookContext: {},
+        sheetianFlushScroll(callback) {
+          flushing = true;
+          // A pending React commit can change the element while flushSync
+          // drains work. The event's captured position must still win.
+          bar[property] = 17;
+          try { callback(); } finally { flushing = false; }
+        },
+      });
+      const tree = render({ axis });
+      assert.equal(effects.length, 1);
+      effects[0]();
+      for (const position of [160, 25, 480, 0]) {
+        bar[property] = position;
+        tree.props.onScroll({ currentTarget: bar });
+        assert.equal(context[property], position, `${file}, ${axis}, ${position}`);
+      }
+      assert.equal(commits, 4);
+      bar[property] = context[property];
+      tree.props.onScroll({ currentTarget: bar });
+      assert.equal(commits, 4, "programmatic synchronization must not cause a feedback update");
+      assert.equal(context[axis === "x" ? "scrollTop" : "scrollLeft"], 0);
+    }
+    for (const target of ["containerRef.current.scrollLeft", "containerRef.current.scrollTop", "refs.cellArea.current.scrollLeft"]) {
+      assert(patched.includes(`useLayoutEffect(function () {\n    ${target}`), `${target} must synchronize before paint`);
+    }
+  }
+  assert.throws(() => patchScrollSynchronization("future engine"));
 });
