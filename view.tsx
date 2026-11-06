@@ -13,6 +13,7 @@ import { autoFitRows, fitRowHeight } from "./row-autofit";
 import type { SpreadsheetSettings } from "./settings";
 import { mountMenuBar, type SheetMenu, type SheetMenuItem } from "./menu-bar";
 import type { MenuPayload } from "./menu-actions";
+import { downloadSheetPdf } from "./pdf-export";
 
 export const VIEW_TYPE_SPREADSHEET = "spreadsheet-view";
 
@@ -74,6 +75,8 @@ export class SpreadsheetView extends TextFileView {
     super.onPaneMenu(menu, source);
     if (this.importFile) menu.addItem(item => item.setTitle("Import Excel workbook (.xlsx)").setIcon("file-input")
       .onClick(() => this.importFile!()));
+    menu.addItem(item => item.setTitle("Export active sheet to PDF").setIcon("file-down")
+      .onClick(() => { void this.exportPdf().catch(error => new Notice(`PDF export failed: ${error.message}`)); }));
   }
 
   getViewData(): string {
@@ -243,7 +246,7 @@ export class SpreadsheetView extends TextFileView {
       item === "paste" ? ["sheetian-paste", "sheetian-paste-values", "sheetian-paste-formulas", "sheetian-paste-formatting"] : [item]);
   }
 
-  private prepareMenu(draft?: HTMLElement): void {
+  private prepareMenu(draft?: HTMLElement, restoreSelection = true): void {
     // Commit an active draft before opening a command menu, then restore the
     // selection so formatting/insertion applies to the same cells.
     const selection = this.workbook.current?.getSelection();
@@ -255,7 +258,7 @@ export class SpreadsheetView extends TextFileView {
       flushSync(() => workbook?.runMenuAction("commit-formula", { editor: input as HTMLDivElement }));
       flushSync(() => input.blur());
     } else this.commitInput();
-    if (selection?.length) flushSync(() => this.workbook.current?.setSelection(selection));
+    if (restoreSelection && selection?.length) flushSync(() => this.workbook.current?.setSelection(selection));
   }
 
   private sheetMenus(generation: number): SheetMenu[] {
@@ -284,7 +287,8 @@ export class SpreadsheetView extends TextFileView {
       { title: "File", items: [
         item("New spreadsheet", () => this.newFile?.(), !this.newFile),
         item("Import Excel workbook (.xlsx)", () => this.importFile?.(), !this.importFile),
-        item("Export active sheet to CSV", () => this.exportCsv(), !api), null,
+        item("Export active sheet to CSV", () => this.exportCsv(), !api),
+        item("Export active sheet to PDF", () => this.exportPdf(), !api), null,
         item("Save", () => this.save()),
       ] },
       { title: "Edit", items: [
@@ -400,6 +404,16 @@ export class SpreadsheetView extends TextFileView {
     }
     this.disposeWorkbook();
     this.contentEl.empty();
+  }
+
+  async exportPdf(): Promise<void> {
+    this.prepareMenu(undefined, false);
+    await Promise.resolve();
+    flushSync(() => {});
+    const sheet = this.workbook.current?.getSheet();
+    if (!sheet || !this.file) return;
+    const path = await downloadSheetPdf(sheet, `${this.file.basename}.pdf`);
+    if (path) new Notice(`Exported active sheet to ${path}`);
   }
 
   async exportCsv(): Promise<void> {

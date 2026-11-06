@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const realRequire = createRequire(import.meta.url);
-let renders = [], roots = [], observers = [];
+let renders = [], roots = [], observers = [], pdfDialogs = [];
 class Element {
   dataset = {};
   ownerDocument = { defaultView: { ResizeObserver: class {
@@ -38,6 +38,9 @@ vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports
       roots.push(root); return root;
     } };
     if (name === "@fortune-sheet/react") return { Workbook: "Workbook" };
+    if (name === "electron") return { remote: { getCurrentWindow() {}, dialog: {
+      async showSaveDialog(_parent, options) { pdfDialogs.push(options); return { canceled: true }; },
+    } } };
     return realRequire(name);
   }, console });
 const { SpreadsheetView } = module.exports;
@@ -92,4 +95,27 @@ test("repeated loads disconnect every observer and unmount every obsolete root",
   view.clear();
   assert.ok(roots.at(-1).unmounted);
   assert.ok(observers.at(-1).disconnected);
+});
+test("PDF export commits a focused formula draft without restoring the menu selection a second time", async () => {
+  const view = make();
+  view.setViewData(source, true);
+  view.file.basename = "test";
+  const editor = new Element();
+  editor.blur = () => { view.contentEl.ownerDocument.activeElement = null; };
+  view.contentEl.querySelector = selector => selector === ".fortune-fx-input" ? editor : null;
+  view.contentEl.ownerDocument.activeElement = editor;
+  const sheet = { name: "Active", data: [[{ f: "=2+3", v: 5 }]] };
+  let committed = false;
+  view.workbook.current = {
+    getSelection: () => Object.freeze([Object.freeze({ row: [0, 0], column: [0, 0] })]),
+    getSheet: () => sheet,
+    runMenuAction(action, payload) {
+      assert.equal(action, "commit-formula"); assert.equal(payload.editor, editor);
+      sheet.data[0][0] = { f: "=2+8", v: 10 }; committed = true;
+    },
+    setSelection() { assert.fail("Export must not enqueue another selection restoration"); },
+  };
+  await view.exportPdf();
+  assert.ok(committed);
+  assert.equal(pdfDialogs.at(-1).defaultPath, "test.pdf");
 });

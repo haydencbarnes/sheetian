@@ -10,6 +10,7 @@ Sheetian repairs data-loss and save lifecycle defects, preserves images, filters
 2. Right-click a folder or file to create a spreadsheet in that folder.
 3. Use the **File, Edit, View, Insert, Format, Data, Tools, and Help** menus above the formatting toolbar for import/export, editing, layout, sorting/filtering, and help. Edit cells, use formulas, format cells, and insert images with the spreadsheet toolbar. Beside Format Painter, type a zoom percentage from 10% to 400% and press Enter or click away to apply it; Escape cancels. The arrow offers preset percentages, and each sheet remembers its zoom. Drag the formula bar's bottom edge to make it taller or shorter, or click its right-hand chevron to expand/collapse. The resize grip supports arrow keys and Home/End.
 4. Run **Sheetian: Export active sheet to CSV** to save displayed values beside the workbook. Existing CSVs receive a numbered suffix.
+5. Choose **File → Export active sheet to PDF**, the same option in the sheet's **⋯** menu, or **Sheetian: Export active sheet to PDF** in the command palette. Choose where to save the PDF in the save dialog. The export includes the active tab's used cells, displayed formula results, basic fonts/colors/alignment, rich text, borders, merges, and embedded raster images. Hidden rows/columns are omitted. Wide sheets fit to landscape A4; longer sheets continue onto additional pages. Export uses the saved cell colors on a white page, independently of the display theme or zoom.
 
 In **Settings → Sheetian**, choose the default folder, currency symbol, and light/dark/Obsidian theme. Settings apply when you open a spreadsheet. Dark display inverts canvas colors with hue rotation; stored cell formatting remains intact and images receive a compensating filter. It does not reproduce every custom Obsidian theme's palette.
 
@@ -54,6 +55,6 @@ The bundled JavaScript is generated and intentionally ignored by Git. Build-time
 
 ## Scope
 
-This is a desktop plugin. Mobile compatibility, live Google Sheets synchronization, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas.
+This is a desktop plugin. Mobile compatibility, live Google Sheets synchronization, native vault-wide content search, Markdown embeddings, custom executable functions, automatic numeric alignment, and native cell wikilinks remain separate features. CSV exports values, not workbook styling or editable formulas. PDF exports a static view; conditional formatting, rotated text, remote images, and interactive workbook features are not reproduced.
 
 Use GitHub issues for support. The plugin is MIT-licensed; original author: Divam Gupta.

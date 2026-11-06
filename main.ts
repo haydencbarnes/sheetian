@@ -32,6 +32,12 @@ export default class SpreadsheetPlugin extends Plugin {
       if (!checking) void view.exportCsv().catch(error => new Notice(`CSV export failed: ${error.message}`));
       return true;
     } });
+    this.addCommand({ id: "export-pdf", name: "Export active sheet to PDF", checkCallback: checking => {
+      const view = this.app.workspace.getActiveViewOfType(SpreadsheetView);
+      if (!view) return false;
+      if (!checking) void view.exportPdf().catch(error => new Notice(`PDF export failed: ${error.message}`));
+      return true;
+    } });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
       const folder = file instanceof TFolder ? file.path : file.parent?.path;
       menu.addItem(item => item.setTitle("New spreadsheet").setIcon("table")
