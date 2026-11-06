@@ -113,6 +113,34 @@ export function patchScrollbarLayout(source) {
     },`);
 }
 
+// React treats scroll as a continuous event and can defer its context update
+// until after paint. Keep the native thumb, canvas, headers and selections in
+// the same frame, and never let a delayed effect write an old offset back.
+export function patchScrollSynchronization(source) {
+  const handler = /onScroll: function onScroll\(\) \{\n      if \(axis === "x"\) \{\n        setContext\(function \(draftCtx\) \{\n          draftCtx\.scrollLeft = refs\.scrollbarX\.current\.scrollLeft;\n        \}\);\n      \} else \{\n        setContext\(function \(draftCtx\) \{\n          draftCtx\.scrollTop = refs\.scrollbarY\.current\.scrollTop;\n        \}\);\n      \}\n    \}/g;
+  const effects = [
+    /(?:React\.)?useEffect\(function \(\) \{\n    containerRef\.current\.scrollLeft = context\.scrollLeft;/g,
+    /(?:React\.)?useEffect\(function \(\) \{\n    containerRef\.current\.scrollTop = context\.scrollTop;/g,
+    /(?:React\.)?useEffect\(function \(\) \{\n    if \(axis === "x"\) \{\n      refs\.scrollbarX\.current\.scrollLeft = context\.scrollLeft;/g,
+    /(?:React\.)?useEffect\(function \(\) \{\n    refs\.cellArea\.current\.scrollLeft = context\.scrollLeft;/g,
+  ];
+  for (const site of [handler, ...effects]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's scroll synchronization compatibility patch.");
+  }
+  source = source.replace(handler, `onScroll: function onScroll(event) {
+      var property = axis === "x" ? "scrollLeft" : "scrollTop";
+      var position = event.currentTarget[property];
+      if (position === context[property]) return;
+      sheetianFlushScroll(function () {
+        setContext(function (draftCtx) {
+          draftCtx[property] = position;
+        }, { noHistory: true });
+      });
+    }`);
+  for (const effect of effects) source = source.replace(effect, match => match.replace("useEffect", "useLayoutEffect"));
+  return 'import { flushSync as sheetianFlushScroll } from "react-dom";\n' + source;
+}
+
 export function patchMenuActions(source) {
   const apiMethod = /    calculateFormula: function calculateFormula\(id, range\) \{/g;
   if (source.match(apiMethod)?.length !== 1) throw new Error("Recheck FortuneSheet's menu action compatibility patch.");
@@ -186,7 +214,7 @@ export function patchClipboardMenu(source) {
     }, clipboardTitles[name]);`);
 }
 
-export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchScrollbarLayout(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source))))))))); }
+export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchScrollSynchronization(patchScrollbarLayout(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
