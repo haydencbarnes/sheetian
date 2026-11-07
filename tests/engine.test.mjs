@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
-import { patchEngine, patchDelayedFocus, patchPasteOwnership, patchToolbarZoom, patchFormulaBar, patchScrollbarLayout } from "../engine-compat.mjs";
+import { patchEngine, patchDelayedFocus, patchPasteOwnership, patchToolbarZoom, patchFormulaBar, patchScrollbarLayout, patchViewportResize } from "../engine-compat.mjs";
 
 test("delayed focus is safe after the workbook unmounts", () => {
   let callback, calls = 0;
@@ -72,6 +72,58 @@ test("formula bar resizing measures and draws the viewport after its height comm
     assert.match(patched, /useLayoutEffect\(function \(\) \{\n    (?:core\.)?initFreeze\(context, refs.globalCache, context.currentSheetId\);/);
   }
 });
+test("pane and window resizing finish repainting before returning and leave stable canvases alone", async () => {
+  for (const file of ["index.js", "index.esm.js"]) for (const fixedRatio of [0, 2]) {
+    const patched = patchViewportResize(await readFile(`node_modules/@fortune-sheet/react/dist/${file}`, "utf8"));
+    const effect = patched.match(/(?:React\.)?useEffect\((function \(\) \{\n    var placeholder = placeholderRef.current;[\s\S]+?\n  \}), \[data, refs.canvas, setContext, settings.devicePixelRatio\]\);/)[1];
+    let callback, disconnected = false, flushing = false, painted = true, resets = 0, removed = false;
+    const listeners = new Map();
+    const ownerWindow = { devicePixelRatio: 2, ResizeObserver: class {
+      constructor(fn) { callback = fn; }
+      observe(element) { assert.equal(element, placeholder); }
+      disconnect() { disconnected = true; }
+    }, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: (type, fn) => {
+      assert.equal(listeners.get(type), fn); listeners.delete(type); removed = true;
+    } };
+    const placeholder = { ownerDocument: { defaultView: ownerWindow }, isConnected: true, clientWidth: 800, clientHeight: 500 };
+    const canvas = { current: {} }, ctx = { devicePixelRatio: 2, luckysheetTableContentHW: [800, 500] };
+    const updateContextWithCanvas = (draft, element, measured) => {
+      assert.equal(flushing, true, "clearing the bitmap must be inside a synchronous repaint boundary");
+      assert.equal(element, canvas.current); assert.equal(measured, placeholder);
+      draft.luckysheetTableContentHW = [measured.clientWidth, measured.clientHeight];
+      painted = false; resets++;
+    };
+    const cleanup = vm.runInNewContext(`(${effect})()`, {
+      placeholderRef: { current: placeholder }, refs: { canvas }, data: [], settings: { devicePixelRatio: fixedRatio },
+      setContext: (recipe, options) => { assert.equal(options.noHistory, true); recipe(ctx); },
+      sheetianFlushResize: fn => { flushing = true; try { fn(); painted = true; } finally { flushing = false; } },
+      core: { updateContextWithCanvas }, updateContextWithCanvas,
+      updateContextWithSheetData: () => assert.fail("Resizing must not rebuild sheet data or normalize selection"),
+    });
+    callback(); listeners.get("resize")();
+    assert.equal(resets, 0, "unchanged geometry must preserve the existing bitmap");
+    for (const [width, height] of [[520, 500], [1000, 500], [1000, 300]]) {
+      placeholder.clientWidth = width; placeholder.clientHeight = height;
+      callback(); assert.equal(painted, true);
+      assert.deepEqual(ctx.luckysheetTableContentHW, [width, height]);
+      const previousResets = resets;
+      listeners.get("resize")();
+      assert.equal(resets, previousResets, "a following window event must not clear the resized canvas again");
+    }
+    assert.equal(resets, 3);
+    ownerWindow.devicePixelRatio = 1;
+    listeners.get("resize")();
+    assert.equal(ctx.devicePixelRatio, fixedRatio || 1);
+    assert.equal(resets, fixedRatio ? 3 : 4, "automatic DPR must track the owning window");
+    assert.equal(painted, true);
+    const previousResets = resets;
+    placeholder.clientWidth = 750; placeholder.isConnected = false;
+    callback(); assert.equal(resets, previousResets);
+    placeholder.isConnected = true; canvas.current = null;
+    assert.doesNotThrow(callback); assert.equal(resets, previousResets);
+    cleanup(); assert.ok(disconnected && removed); assert.equal(listeners.size, 0);
+  }
+});
 test("scrollbars are siblings of the overlay and size themselves from the sheet frame", async () => {
   const react = { createElement: (type, props, ...children) => ({ type, props, children }) };
   for (const file of ["index.js", "index.esm.js"]) {
@@ -108,4 +160,5 @@ test("the compatibility patch still matches the pinned engine's two distribution
   }
   assert.throws(() => patchEngine("unexpected future engine"));
   assert.throws(() => patchToolbarZoom("unexpected future engine"));
+  assert.throws(() => patchViewportResize("unexpected future engine"));
 });

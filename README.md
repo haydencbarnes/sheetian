@@ -16,6 +16,8 @@ In **Settings → Sheetian**, choose the default folder, currency symbol, and li
 
 - **Double-click a column header’s right edge** to fit its contents. Select several column headers first to fit them all. Widths account for displayed values, font sizes, bold/italic text, and explicit line breaks; horizontally merged cells are excluded.
 - **Double-click a row header’s bottom edge** to fit its height. Select several row headers first to fit them all. Heights account for wrapped text at the current column widths, line breaks, and fonts/rich text. Cells merged across columns use their combined width; cells merged across rows are excluded. Heights support undo/redo and persist after reopening.
+- Drag row or column header boundaries to resize them manually. Manual resizing and AutoFit, including **Tools → Fit selected columns/rows**, each support one-step undo/redo through **Edit → Undo/Redo**, **Cmd+Z / Ctrl+Z**, and **Cmd+Shift+Z / Ctrl+Y**.
+- Column widths preview while dragging. The view follows the resized edge; hold the pointer at the right edge to keep widening the final column without moving it out of view.
 - **F2** opens the current cell editor with the caret at the end.
 - **Cmd+B / Ctrl+B** toggles the selected cells' bold format.
 - **Cmd+C / Ctrl+C** copies selected cells with formulas, number formats, fonts, colors, alignment, wrapping, borders, and merged cells. Copies retain a snapshot of the selection and work between Sheetian workbooks; relative formula references adjust at the destination while `$` references stay fixed.

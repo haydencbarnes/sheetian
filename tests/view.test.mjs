@@ -5,15 +5,10 @@ import { createRequire } from "node:module";
 import vm from "node:vm";
 
 const realRequire = createRequire(import.meta.url);
-let renders = [], roots = [], observers = [], pdfDialogs = [];
+let renders = [], roots = [], pdfDialogs = [];
 class Element {
   dataset = {};
-  ownerDocument = { defaultView: { ResizeObserver: class {
-    disconnected = false;
-    constructor() { observers.push(this); }
-    observe() {}
-    disconnect() { this.disconnected = true; }
-  }, Event: class {}, dispatchEvent() {} }, activeElement: null };
+  ownerDocument = { defaultView: {}, activeElement: null };
   empty() {} addClass() {} createEl() { return new Element(); } setAttribute() {} createDiv() { return new Element(); } addEventListener() {} contains() { return false; } querySelector() { return null; }
 }
 class TextFileView {
@@ -30,7 +25,10 @@ const result = await build({ entryPoints: ["view.tsx"], bundle: true, write: fal
 const module = { exports: {} };
 vm.runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, HTMLElement: Element, queueMicrotask,
   require: name => {
-    if (name === "obsidian") return { TextFileView, Notice: class {}, Scope: class { register() {} } };
+    if (name === "obsidian") return { TextFileView, Notice: class {}, Scope: class {
+      handlers = new Map();
+      register(modifiers, key, callback) { this.handlers.set([...modifiers, key].join("+"), callback); }
+    } };
     if (name === "react") return { createRef: () => ({ current: null }), createElement: (_type, props) => props };
     if (name === "react-dom") return { flushSync: fn => fn() };
     if (name === "react-dom/client") return { createRoot: () => {
@@ -76,7 +74,6 @@ test("closing immediately after editing flushes the changed snapshot", async () 
   await view.onUnloadFile(view.file);
   assert.equal(JSON.parse(view.saved[0])[0].celldata[0].v.v, "new value");
   assert.ok(roots.at(-1).unmounted);
-  assert.ok(observers.at(-1).disconnected);
 });
 test("invalid JSON survives close unchanged and does not mount an editable workbook", async () => {
   const view = make(), count = renders.length;
@@ -85,16 +82,29 @@ test("invalid JSON survives close unchanged and does not mount an editable workb
   await view.onClose();
   assert.equal(view.saved[0], "damaged but valuable bytes");
 });
-test("repeated loads disconnect every observer and unmount every obsolete root", () => {
+test("repeated loads unmount every obsolete root", () => {
   const view = make();
   view.setViewData(source, true);
-  const firstRoot = roots.at(-1), firstObserver = observers.at(-1);
+  const firstRoot = roots.at(-1);
   view.setViewData(source, false);
   assert.ok(firstRoot.unmounted);
-  assert.ok(firstObserver.disconnected);
   view.clear();
   assert.ok(roots.at(-1).unmounted);
-  assert.ok(observers.at(-1).disconnected);
+});
+test("workbook undo/redo shortcuts work after header resizing and leave text editors alone", () => {
+  const view = make();
+  let undos = 0, redos = 0;
+  view.workbook.current = { handleUndo() { undos++; }, handleRedo() { redos++; } };
+  for (const key of ["Mod+z", "Mod+Shift+z", "Mod+y"]) {
+    assert.equal(view.scope.handlers.get(key)(), false);
+  }
+  assert.equal(undos, 1); assert.equal(redos, 2);
+  view.contentEl.ownerDocument.activeElement = { matches: () => true };
+  view.contentEl.contains = () => true;
+  for (const key of ["Mod+z", "Mod+Shift+z", "Mod+y"]) {
+    assert.equal(view.scope.handlers.get(key)(), undefined);
+  }
+  assert.equal(undos, 1); assert.equal(redos, 2);
 });
 test("PDF export commits a focused formula draft without restoring the menu selection a second time", async () => {
   const view = make();

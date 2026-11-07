@@ -3434,11 +3434,13 @@
   margin-left: 15px;
 }
 
-.obsidian-spreadsheet-view {
+/* Outrank Obsidian's .workspace-leaf-content .view-content overflow:auto.
+   Clip also prevents menu focus from scrolling the entire workbook sideways. */
+.workspace-leaf-content .view-content.obsidian-spreadsheet-view {
   display: flex;
   flex-direction: column;
   padding: 0 !important;
-  overflow: hidden;
+  overflow: clip;
   min-width: 0;
   min-height: 0;
 }

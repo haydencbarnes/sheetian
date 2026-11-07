@@ -19,7 +19,9 @@ export function patchPasteOwnership(source) {
 // Keeping this on the existing resize handle avoids duplicating its geometry.
 export function patchColumnResizeTarget(source) {
   const handle = /id: "fortune-cols-change-size",/g;
-  if (source.match(handle)?.length !== 1) throw new Error("Recheck FortuneSheet's column resize target patch.");
+  const hover = /if \(col_index !== hoverLocation\.col_index\) \{/g;
+  if (source.match(handle)?.length !== 1 || source.match(hover)?.length !== 1) throw new Error("Recheck FortuneSheet's column resize target patch.");
+  source = source.replace(hover, "if (col_index !== hoverLocation.col_index || col !== hoverLocation.col || col_pre !== hoverLocation.col_pre) {");
   return source.replace(handle, '$&\n    "data-sheetian-column": allowEditRef.current ? hoverLocation.col_index : undefined,');
 }
 
@@ -75,21 +77,150 @@ export function patchFormulaBar(source) {
     setContext(function (ctx) {
       ${updateCanvas}(ctx, canvas, placeholder);
     }, { noHistory: true });
-  });
-  ${effect}(function () {
+  });`);
+  return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
+}
+
+// Obsidian resizes panes without resizing their window. Observe the actual
+// viewport and finish the canvas update and layout-effect repaint together.
+// Clearing the bitmap in an ordinary state updater can expose a blank frame
+// while React defers the commit. A global synthetic resize also clears every
+// other workbook, even when none of their dimensions changed.
+export function patchViewportResize(source) {
+  const listener = /(?:React\.)?useEffect\(function \(\) \{\n    function resize\(\) \{[\s\S]*?\n  \}, \[data, refs.canvas, setContext, settings.devicePixelRatio\]\);/g;
+  if (source.match(listener)?.length !== 1) throw new Error("Recheck FortuneSheet's viewport resize compatibility patch.");
+  const commonjs = source.includes("var placeholderRef = React.useRef(null);");
+  const effect = commonjs ? "React.useEffect" : "useEffect";
+  const updateCanvas = commonjs ? "core.updateContextWithCanvas" : "updateContextWithCanvas";
+  source = source.replace(listener, `${effect}(function () {
     var placeholder = placeholderRef.current;
     if (!placeholder) return;
-    var observer = new placeholder.ownerDocument.defaultView.ResizeObserver(function () {
-      if (!placeholder.isConnected || !refs.canvas.current) return;
-      setContext(function (ctx) {
-        if (ctx.luckysheetTableContentHW[0] === placeholder.clientWidth && ctx.luckysheetTableContentHW[1] === placeholder.clientHeight) return;
-        ${updateCanvas}(ctx, refs.canvas.current, placeholder);
-      }, { noHistory: true });
-    });
+    var ownerWindow = placeholder.ownerDocument.defaultView;
+    function resize() {
+      if (!data || !placeholder.isConnected || !refs.canvas.current) return;
+      sheetianFlushResize(function () {
+        setContext(function (ctx) {
+          var pixelRatio = settings.devicePixelRatio || ownerWindow.devicePixelRatio;
+          if (ctx.luckysheetTableContentHW[0] === placeholder.clientWidth &&
+              ctx.luckysheetTableContentHW[1] === placeholder.clientHeight && ctx.devicePixelRatio === pixelRatio) return;
+          ctx.devicePixelRatio = pixelRatio;
+          ${updateCanvas}(ctx, refs.canvas.current, placeholder);
+        }, { noHistory: true });
+      });
+    }
+    var observer = new ownerWindow.ResizeObserver(resize);
     observer.observe(placeholder);
-    return function () { observer.disconnect(); };
-  }, [refs.canvas, setContext, context.currentSheetId, context.devicePixelRatio]);`);
-  return 'import { FormulaBarControls } from ' + JSON.stringify(new URL("./formula-bar.tsx", import.meta.url).pathname) + ';\n' + source;
+    ownerWindow.addEventListener("resize", resize);
+    return function () {
+      observer.disconnect();
+      ownerWindow.removeEventListener("resize", resize);
+    };
+  }, [data, refs.canvas, setContext, settings.devicePixelRatio]);`);
+  return 'import { flushSync as sheetianFlushResize } from "react-dom";\n' + source;
+}
+
+// History contains workbook data, while the engine keeps a separate active
+// config for drawing and hit testing. Restore that config along with history
+// so undo/redo of widths, heights and AutoFit also restores the visible grid.
+export function patchHistoryLayout(source) {
+  const history = /var newContext = ((?:produce\.)?applyPatches\(ctx_, history\.(?:inversePatches|patches)\));/g;
+  const geometry = /(?:React\.)?useEffect\(function \(\) \{\n    if \(!data\) return;\n    setContext\(function \(draftCtx\) \{\n      return (?:core\.)?updateContextWithSheetData\(draftCtx, data\);/g;
+  if (source.match(history)?.length !== 2 || source.match(geometry)?.length !== 1) {
+    throw new Error("Recheck FortuneSheet's history layout compatibility patch.");
+  }
+  const commonjs = source.includes("var produce__default =");
+  const producer = commonjs ? "produce__default['default']" : "produce";
+  const getIndex = commonjs ? "core.getSheetIndex" : "getSheetIndex";
+  source = source.replace(history, (_match, apply) => `var newContext = ${producer}(${apply}, function (draft) {
+          var index = ${getIndex}(draft, draft.currentSheetId);
+          if (index != null) draft.config = draft.luckysheetfile[index].config || {};
+          if (Number.isFinite(ctx_.cellmainWidth) && history.patches.some(function (patch) {
+            return patch.path[0] === "luckysheetfile" && patch.path[1] === index && patch.path[2] === "config";
+          })) {
+            var viewport = scrollbarX.current?.clientWidth || ctx_.cellmainWidth;
+            var atEnd = ctx_.scrollLeft >= Math.max(0, ctx_.ch_width - viewport) - 1;
+            if (atEnd) draft.sheetianFollowResizeEnd = true;
+          }
+        });`);
+  return source.replace(geometry, match => match.replace("useEffect", "useLayoutEffect"));
+}
+
+// A menu must fit its workbook pane before taking focus. Window-wide bounds
+// and a document-wide focus query can otherwise scroll the entire view, or
+// focus a different workbook's menu, even with its outer scrollbar hidden.
+export function patchContextMenuLayout(source) {
+  const layout = /(?:React\.)?useLayoutEffect\(function \(\) \{\n    var _refs\$workbookContain;[\s\S]*?\n  \}, \[contextMenu.x, contextMenu.y, refs.workbookContainer, setContext\]\);/g;
+  const focus = /(?:React\.)?useEffect\(function \(\) \{\n    var element = document.querySelector\(".luckysheet-cols-menuitem"\);\n    if \(element\) \{\n      element.focus\(\);\n    \}\n  \}, \[\]\);/g;
+  const arrow = /        ctx.contextMenu = \{\n          x: e.pageX,\n          y: 90,\n          headerMenu: true\n        \};/g;
+  for (const site of [layout, focus, arrow]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's context menu layout compatibility patch.");
+  }
+  const hooks = source.includes("var containerRef = React.useRef(null);") ? "React." : "";
+  source = source.replace(layout, `${hooks}useLayoutEffect(function () {
+    var menu = containerRef.current, workbook = refs.workbookContainer.current;
+    if (!menu || !workbook) return;
+    var position = fitContextMenu(menu, workbook, contextMenu);
+    if (position.x === contextMenu.x && position.y === contextMenu.y) return;
+    setContext(function (ctx) {
+      ctx.contextMenu.x = position.x;
+      ctx.contextMenu.y = position.y;
+    }, { noHistory: true });
+  });`);
+  source = source.replace(focus, `${hooks}useEffect(function () {
+    var element = containerRef.current;
+    var menu = element?.closest(".fortune-context-menu");
+    if (element && element === menu?.querySelector(".luckysheet-cols-menuitem")) element.focus({ preventScroll: true });
+  }, []);`);
+  source = source.replace(arrow, `        var workbookRect = refs.workbookContainer.current.getBoundingClientRect();
+        ctx.contextMenu = {
+          x: e.clientX - workbookRect.left,
+          y: containerRef.current.getBoundingClientRect().bottom - workbookRect.top,
+          headerMenu: true
+        };`);
+  return 'import { fitContextMenu } from ' + JSON.stringify(new URL("./menu-layout.ts", import.meta.url).pathname) + ';\n' + source;
+}
+
+// Render width previews without changing saved data, and follow the resized
+// edge before paint. The ordinary mouseup still creates one history entry.
+export function patchColumnResizePreview(source) {
+  const move = /var onMouseMove = (?:React\.)?useCallback\(function \(nativeEvent\) \{\n    setContext\(function \(draftCtx\) \{\n      overShowLinkCard/g;
+  const up = /var onMouseUp = (?:React\.)?useCallback\(function \(nativeEvent\) \{\n    setContext\(function \(draftCtx\) \{\n      try \{\n        ((?:core\.)?handleOverlayMouseUp\([^;]+;)/g;
+  const dependencies = /\[overShowLinkCard, refs.cellInput, refs.fxInput, refs.globalCache, refs.scrollbarX, refs.scrollbarY, setContext\]/g;
+  const upDependencies = /\[refs.cellInput, refs.fxInput, refs.globalCache, refs.scrollbarX, refs.scrollbarY, setContext, settings, showAlert\]/g;
+  const grip = /left: hoverLocation.col - 5 \+ \(hoverInFreeze \? context.scrollLeft : 0\),/g;
+  const line = /className: "fortune-change-size-line",/g;
+  const sheet = /var Sheet = function Sheet\(_ref\) \{[\s\S]*?\n    settings = _useContext.settings;/g;
+  const geometry = /((?:React\.)?useLayoutEffect\(function \(\) \{\n    )if \(!data\) return;\n    setContext\(function \(draftCtx\) \{\n      return (?:core\.)?updateContextWithSheetData\(draftCtx, data\);/g;
+  for (const site of [move, up, dependencies, upDependencies, grip, line, sheet, geometry]) {
+    if (source.match(site)?.length !== 1) throw new Error("Recheck FortuneSheet's column resize preview compatibility patch.");
+  }
+  const core = source.includes("core.handleOverlayMouseUp") ? "core." : "";
+  const hooks = core ? "React." : "";
+  source = source.replace(geometry, match => match.replace("if (!data) return;", "if (!data || sheetGeometryMatches(context, data)) return;"));
+  source = source.replace(sheet, `$&
+  ${hooks}useLayoutEffect(function () {
+    var target = resizeHistoryScrollTarget(context, refs.scrollbarX.current?.clientWidth || context.cellmainWidth);
+    if (target == null) return;
+    setContext(function (ctx) {
+      ctx.scrollLeft = target;
+      delete ctx.sheetianFollowResizeEnd;
+    }, { noHistory: true });
+  });`);
+  source = source.replace(move, match => `var columnResize = useColumnResizePreview(context, setContext, refs);
+  ` + match.replace("    setContext", "    if (columnResize.move(nativeEvent)) return;\n    setContext"));
+  source = source.replace(up, (match, call) => match.replace("    setContext", "    var extraPixels = columnResize.finish();\n    setContext")
+    .replace(call, `var resizedColumn = prepareColumnResizeCommit(draftCtx, extraPixels);
+        ${call}
+        if (resizedColumn != null) {
+          var data = ${core}getFlowdata(draftCtx);
+          if (data) ${core}updateContextWithSheetData(draftCtx, data);
+          followColumnResize(draftCtx, resizedColumn, refs.scrollbarX.current.clientWidth);
+        }`));
+  source = source.replace(dependencies, match => match.replace("setContext]", "setContext, columnResize]"));
+  source = source.replace(upDependencies, match => match.replace("showAlert]", "showAlert, columnResize]"));
+  source = source.replace(grip, "left: (context.luckysheet_cols_change_size ? context.visibledatacolumn[context.luckysheet_cols_change_size_start[1]] : hoverLocation.col) - 5 + (hoverInFreeze ? context.scrollLeft : 0),");
+  source = source.replace(line, '$&\n    style: context.luckysheet_cols_change_size ? { left: context.visibledatacolumn[context.luckysheet_cols_change_size_start[1]] - 2 } : undefined,');
+  return 'import { useColumnResizePreview, prepareColumnResizeCommit, followColumnResize, resizeHistoryScrollTarget, sheetGeometryMatches } from ' + JSON.stringify(new URL("./column-resize.ts", import.meta.url).pathname) + ';\n' + source;
 }
 
 // Scrollbars must use the flex-sized sheet frame as their containing block.
@@ -214,7 +345,7 @@ export function patchClipboardMenu(source) {
     }, clipboardTitles[name]);`);
 }
 
-export function patchEngine(source) { return patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchFormulaBar(patchScrollSynchronization(patchScrollbarLayout(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))))))); }
+export function patchEngine(source) { return patchColumnResizePreview(patchContextMenuLayout(patchClipboardMenu(patchToolbarZoom(patchMenuActions(patchHistoryLayout(patchViewportResize(patchFormulaBar(patchScrollSynchronization(patchScrollbarLayout(patchRowResizeTarget(patchColumnResizeTarget(patchPasteOwnership(patchDelayedFocus(source)))))))))))))); }
 
 // Chromium snaps scrollTop to physical pixels. A row boundary rounded upward
 // otherwise makes an upward wheel step select that same boundary forever.
@@ -224,6 +355,54 @@ export function patchWheelScroll(source) {
   return source.replace(position, (_match, lodash) => `var scrollPixelRatio = scrollbarY.ownerDocument.defaultView.devicePixelRatio || 1;
   var upwardRounding = e.deltaY < 0 ? 0.5 / scrollPixelRatio + 0.0001 : 0;
   var row_st = ${lodash}.sortedIndex(visibledatarow_c, scrollTop - upwardRounding) + 1;`);
+}
+
+// FortuneSheet adds a fixed 120px margin after the last column. It becomes
+// an empty strip at the rightmost scroll position, outside the finite grid.
+export function patchColumnScrollExtent(source) {
+  const margin = /  var maxColumnlen = 120;\n/g;
+  const extent = /  ctx\.ch_width \+= maxColumnlen;\n/g;
+  if (source.match(margin)?.length !== 1 || source.match(extent)?.length !== 1) {
+    throw new Error("Recheck FortuneSheet's column scroll extent compatibility patch.");
+  }
+  return source.replace(margin, "").replace(extent, "");
+}
+
+// Header drags are relative to their starting pointer, even at the viewport
+// edge. The original 100px clamp can shrink the last column on an outward
+// drag. Column deltas were also divided by zoom twice, while row resizing
+// included its gridline in the saved height and changed it on a simple click.
+export function patchHeaderResizing(source) {
+  const sites = [
+    [/ctx\.luckysheet_rows_change_size_start = \[_y, row_index\];/g,
+      "ctx.luckysheet_rows_change_size_start = [_y, row_index, e.pageY];"],
+    [/ctx\.luckysheet_cols_change_size_start = \[_x, col_index\];/g,
+      "ctx.luckysheet_cols_change_size_start = [_x, col_index, e.pageX];"],
+    [/    var winH = rect\.height;\n    var delta = y \+ 3 - ctx\.luckysheet_rows_change_size_start\[0\];\n    if \(y >= winH - 20 \+ scrollTop\) \{\n      delta = winH - 20 - ctx\.luckysheet_rows_change_size_start\[0\] \+ scrollTop;\n    \}/g,
+      "    var delta = (e.pageY - ctx.luckysheet_rows_change_size_start[2]) / ctx.zoomRatio;\n    if (Math.abs(delta) < 3 / ctx.zoomRatio) return;"],
+    [/    var size = ctx\.defaultrowlen;\n    if \(ctx\.visibledatarow\[ctx\.luckysheet_rows_change_size_start\[1\]\] != null\) \{\n      size = ctx\.visibledatarow\[ctx\.luckysheet_rows_change_size_start\[1\]\] - \(ctx\.visibledatarow\[ctx\.luckysheet_rows_change_size_start\[1\] - 1\] \|\| 0\);\n    \}\n    size \+= delta;/g,
+      "    var size = (cfg.rowlen[ctx.luckysheet_rows_change_size_start[1]] || ctx.defaultrowlen) + delta;"],
+    [/Math\.ceil\(size \/ ctx\.zoomRatio\)/g, "Math.ceil(size)", 2],
+    [/    var winW = rect\.width;\n    var _delta = x \+ 3 - ctx\.luckysheet_cols_change_size_start\[0\];\n    if \(x >= winW - 100 \+ scrollLeft\) \{\n      _delta = winW - 100 - ctx\.luckysheet_cols_change_size_start\[0\] \+ scrollLeft;\n    \}/g,
+      "    var _delta = e.pageX - ctx.luckysheet_cols_change_size_start[2];"],
+    [/    _delta \/= ctx\.zoomRatio;/g,
+      "    _delta /= ctx.zoomRatio;\n    if (Math.abs(_delta) < 3 / ctx.zoomRatio) return;"],
+    [/    if \(Math\.abs\(_size - firstcolumnlen\) < 3\) \{\n      return;\n    \}\n/g, ""],
+    [/Math\.ceil\(_size \/ ctx\.zoomRatio\)/g, "Math.ceil(_size)", 2],
+  ];
+  for (const [site, replacement, count = 1] of sites) {
+    if (source.match(site)?.length !== count) throw new Error("Recheck FortuneSheet's header resizing compatibility patch.");
+    source = source.replace(site, replacement);
+  }
+  for (const [position, limit, next] of [
+    ["_x3", "rect.width + ctx.scrollLeft - 100", "luckysheet_rows_change_size"],
+    ["_y3", "rect.height + ctx.scrollTop - 20", "luckysheet_cols_freeze_drag"],
+  ]) {
+    const preview = new RegExp("    if \\(" + position + " < " + limit.replace(/[.+]/g, "\\$&") + "\\) \\{\\n([\\s\\S]*?)\\n    \\}\\n  \\} else if \\(ctx\\." + next + "\\) \\{", "g");
+    if (source.match(preview)?.length !== 1) throw new Error("Recheck FortuneSheet's header resize preview compatibility patch.");
+    source = source.replace(preview, (_match, body) => body.replace(/^  /gm, "") + "\n  } else if (ctx." + next + ") {");
+  }
+  return source;
 }
 
 // The parser lexer treats bare TRUE/FALSE as column labels and rejects them
@@ -337,4 +516,4 @@ export function patchPasteFormulaCalculation(source) {
     }`);
 }
 
-export function patchCore(source) { return patchPasteFormulaCalculation(patchCutPaste(patchCopyWriter(patchTextFormula(patchFormulaEditing(patchWheelScroll(source)))))); }
+export function patchCore(source) { return patchPasteFormulaCalculation(patchCutPaste(patchCopyWriter(patchTextFormula(patchFormulaEditing(patchHeaderResizing(patchColumnScrollExtent(patchWheelScroll(source)))))))); }
