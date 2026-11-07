@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import lodash from "lodash";
-import { patchWheelScroll, patchScrollSynchronization } from "../engine-compat.mjs";
+import { patchWheelScroll, patchScrollSynchronization, patchColumnScrollExtent } from "../engine-compat.mjs";
 
 async function wheel(file = "index.esm.js") {
   const source = patchWheelScroll(await readFile(`node_modules/@fortune-sheet/core/dist/${file}`, "utf8"));
@@ -59,6 +59,29 @@ test("upward scrolling works from an arbitrary bottom clamp with hidden and diff
 test("the scroll patch matches both pinned engine distributions and rejects source changes", async () => {
   assert.equal(typeof await wheel("index.js"), "function");
   assert.throws(() => patchWheelScroll("future engine"));
+});
+
+test("horizontal scroll extent ends at the last visible column at every zoom", async () => {
+  for (const file of ["index.js", "index.esm.js"]) {
+    const source = patchColumnScrollExtent(await readFile(`node_modules/@fortune-sheet/core/dist/${file}`, "utf8"));
+    const start = source.indexOf("function calcRowColSize(");
+    const end = source.indexOf("function ensureSheetIndex(", start);
+    const calcRowColSize = vm.runInNewContext(source.slice(start, end) + "; calcRowColSize;", { getFlowdata: () => [] });
+    for (const zoomRatio of [0.5, 1, 1.3, 2]) for (const columnCount of [1, 26]) {
+      const ctx = { zoomRatio, defaultcollen: 73, defaultrowlen: 19,
+        config: { columnlen: { 0: 19, 1: 546, 2: 60, 3: 292, 25: 100 }, colhidden: { 8: 0, 24: 0 } } };
+      calcRowColSize(ctx, 100, columnCount);
+      const expected = Array.from({ length: columnCount }, (_, c) =>
+        ctx.config.colhidden[c] != null ? 0 : Math.round(((ctx.config.columnlen[c] ?? 73) + 1) * zoomRatio)
+      ).reduce((sum, width) => sum + width, 0);
+      assert.equal(ctx.ch_width, expected, `${file}, zoom ${zoomRatio}, ${columnCount} columns`);
+      assert.equal(ctx.visibledatacolumn.at(-1), expected);
+      // The same calculation must shrink its extent after deleting columns.
+      calcRowColSize(ctx, 100, 0);
+      assert.equal(ctx.ch_width, 0);
+    }
+  }
+  assert.throws(() => patchColumnScrollExtent("future engine"));
 });
 
 test("scrollbar drags commit their captured position synchronously without adding undo history", async () => {

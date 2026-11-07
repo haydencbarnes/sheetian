@@ -24,8 +24,6 @@ export class SpreadsheetView extends TextFileView {
   private generation = 0;
   private root: Root | null = null;
   private disposeMenu: (() => void) | null = null;
-  private resizeObserver: ResizeObserver | null = null;
-  private resizeFrame: number | null = null;
   private workbook = React.createRef<WorkbookInstance>();
 
   constructor(leaf: WorkspaceLeaf, private settings: () => SpreadsheetSettings, private importFile?: () => void, private newFile?: () => void) {
@@ -67,6 +65,9 @@ export class SpreadsheetView extends TextFileView {
       this.clipboardAction("paste-values");
       return false;
     });
+    this.scope.register(["Mod"], "z", () => this.runHistory(false));
+    this.scope.register(["Mod", "Shift"], "z", () => this.runHistory(true));
+    this.scope.register(["Mod"], "y", () => this.runHistory(true));
   }
   getViewType(): string { return VIEW_TYPE_SPREADSHEET; }
   getIcon(): string { return "table"; }
@@ -117,6 +118,12 @@ export class SpreadsheetView extends TextFileView {
     container.addEventListener("keydown", event => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey || this.isEditingText()) return;
       const key = event.key.toLowerCase();
+      if (key === "z" || (key === "y" && !event.shiftKey)) {
+        if (this.runHistory(key === "y" || event.shiftKey) === false) {
+          event.preventDefault(); event.stopImmediatePropagation();
+        }
+        return;
+      }
       const action = key === "c" && !event.shiftKey ? "copy" : key === "x" && !event.shiftKey ? "cut" : key === "v" && event.shiftKey ? "paste-values" : null;
       if (!action) return;
       event.preventDefault(); event.stopImmediatePropagation();
@@ -211,18 +218,14 @@ export class SpreadsheetView extends TextFileView {
         return false;
       } }}
     />);
-    let width = -1, height = -1;
-    this.resizeObserver = new ownerWindow.ResizeObserver(([entry]) => {
-      if (entry.contentRect.width === width && entry.contentRect.height === height) return;
-      width = entry.contentRect.width;
-      height = entry.contentRect.height;
-      if (this.resizeFrame !== null) ownerWindow.cancelAnimationFrame(this.resizeFrame);
-      this.resizeFrame = ownerWindow.requestAnimationFrame(() => {
-        this.resizeFrame = null;
-        if (generation === this.generation) ownerWindow.dispatchEvent(new ownerWindow.Event("resize"));
-      });
-    });
-    this.resizeObserver.observe(container);
+  }
+
+  private runHistory(redo: boolean): boolean | void {
+    if (this.isEditingText()) return;
+    const api = this.workbook.current;
+    if (!api) return;
+    flushSync(() => redo ? api.handleRedo() : api.handleUndo());
+    return false;
   }
 
   private isEditingText(): boolean {
@@ -386,10 +389,6 @@ export class SpreadsheetView extends TextFileView {
     this.generation++;
     this.disposeMenu?.();
     this.disposeMenu = null;
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-    if (this.resizeFrame !== null) this.contentEl.ownerDocument.defaultView?.cancelAnimationFrame(this.resizeFrame);
-    this.resizeFrame = null;
     this.root?.unmount();
     this.root = null;
     this.workbook = React.createRef<WorkbookInstance>();
